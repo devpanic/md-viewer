@@ -1,0 +1,47 @@
+[package]
+name = "md_viewer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web framework
+actix-web = "4.9"
+actix-files = "0.6"
+actix-ws = "0.3"
+
+# Async runtime
+tokio = { version = "1.41", features = ["full"] }
+futures = "0.3"
+
+# Markdown parsing
+pulldown-cmark = { version = "0.12", features = ["simd"] }
+
+# File system watching
+notify = { version = "6.1", default-features = false, features = ["macos_kqueue"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Path and file utilities
+walkdir = "2.5"
+ignore = "0.4"
+
+# Logging
+env_logger = "0.11"
+log = "0.4"
+
+# Error handling
+anyhow = "1.0"
+
+# Templates
+tera = "1.20"
+
+# CLI parsing
+clap = { version = "4.5", features = ["derive"] }
+
+# Browser opener
+open = "5.0"
+
+# HTML escaping
+html-escape = "0.2"
