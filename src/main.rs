@@ -176,6 +176,9 @@ async fn index_handler() -> HttpResponse {
                 </div>
             </div>
         </aside>
+        <button class="sidebar-toggle" id="sidebar-toggle" title="사이드바 토글">
+            <span class="sidebar-toggle-icon" id="sidebar-toggle-icon">&lsaquo;</span>
+        </button>
         <main class="content">
             <div class="markdown-viewer" id="markdown-viewer">
                 <div class="welcome">

@@ -72,5 +72,22 @@ function initialize() {
         console.log('WebSocket disconnected');
     });
 
+    // Sidebar toggle
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle');
+    const toggleIcon = document.getElementById('sidebar-toggle-icon');
+
+    if (localStorage.getItem('sidebar-collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+        toggleIcon.innerHTML = '&rsaquo;';
+    }
+
+    toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        toggleIcon.innerHTML = isCollapsed ? '&rsaquo;' : '&lsaquo;';
+        localStorage.setItem('sidebar-collapsed', isCollapsed);
+    });
+
     console.log('Application initialized');
 }

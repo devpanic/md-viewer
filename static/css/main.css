@@ -23,6 +23,33 @@ body {
     border-right: 1px solid #34495e;
     display: flex;
     flex-direction: column;
+    transition: width 0.3s ease;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sidebar.collapsed {
+    width: 0;
+    border-right: none;
+}
+
+.sidebar-toggle {
+    width: 20px;
+    background: #34495e;
+    border: none;
+    color: #ecf0f1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 16px;
+    padding: 0;
+    transition: background 0.2s;
+}
+
+.sidebar-toggle:hover {
+    background: #3d566e;
 }
 
 .sidebar-header {
@@ -141,6 +168,7 @@ body {
 
 .file-tree {
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 /* Main content */
@@ -148,6 +176,7 @@ body {
     flex: 1;
     overflow-y: auto;
     background: #fff;
+    transition: flex 0.3s ease;
 }
 
 .markdown-viewer {
