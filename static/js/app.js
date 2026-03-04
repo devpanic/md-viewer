@@ -1,6 +1,7 @@
 let wsClient;
 let fileBrowser;
-let markdownViewer;
+let tabManager;
+let contextMenu;
 
 document.addEventListener('DOMContentLoaded', () => {
     initialize();
@@ -29,24 +30,54 @@ function initialize() {
     }
 
     const fileTreeContainer = document.getElementById('file-tree');
-    const viewerContainer = document.getElementById('markdown-viewer');
 
     fileBrowser = new FileBrowser(fileTreeContainer);
-    markdownViewer = new MarkdownViewer(viewerContainer);
     wsClient = new WebSocketClient();
+
+    // Initialize TabManager
+    tabManager = new TabManager();
+    tabManager.init();
+
+    // Initialize ContextMenu
+    contextMenu = new ContextMenu();
+
+    contextMenu.addItem({
+        id: 'open-in-pane-1',
+        label: 'Pane 1에서 열기',
+        group: 'open',
+        order: 1,
+        visible: (ctx) => ctx.type === 'file',
+        handler: (ctx) => tabManager.openTabInPane(ctx.envId, ctx.projectId, ctx.path, '1')
+    });
+
+    contextMenu.addItem({
+        id: 'open-in-pane-2',
+        label: 'Pane 2에서 열기',
+        group: 'open',
+        order: 2,
+        visible: (ctx) => ctx.type === 'file',
+        handler: (ctx) => {
+            if (!tabManager.isSplit) {
+                tabManager.toggleSplitView();
+            }
+            tabManager.openTabInPane(ctx.envId, ctx.projectId, ctx.path, '2');
+        }
+    });
 
     fileBrowser.loadProjectTree();
 
     fileBrowser.on('file-selected', (data) => {
         console.log('File selected:', data);
-        markdownViewer.loadFile(data.envId, data.projectId, data.path);
+        tabManager.openTab(data.envId, data.projectId, data.path);
+    });
+
+    fileBrowser.on('file-context-menu', (data) => {
+        contextMenu.show(data.x, data.y, data);
     });
 
     wsClient.on('file_changed', (data) => {
         console.log('File changed:', data.path);
-        if (markdownViewer.currentPath && data.path.endsWith(markdownViewer.currentPath)) {
-            markdownViewer.refresh();
-        }
+        tabManager.refreshTabsByPath(data.path);
     });
 
     wsClient.on('file_created', (data) => {

@@ -287,6 +287,17 @@ class FileBrowser {
                 this.selectFile(envId, projectId, node.path);
             });
 
+            fileDiv.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.emit('file-context-menu', {
+                    x: e.clientX,
+                    y: e.clientY,
+                    type: 'file',
+                    envId, projectId, path: node.path
+                });
+            });
+
             parent.appendChild(fileDiv);
         }
     }

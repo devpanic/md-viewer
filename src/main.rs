@@ -180,10 +180,30 @@ async fn index_handler() -> HttpResponse {
             <span class="sidebar-toggle-icon" id="sidebar-toggle-icon">&lsaquo;</span>
         </button>
         <main class="content">
-            <div class="markdown-viewer" id="markdown-viewer">
-                <div class="welcome">
-                    <h1>Markdown Viewer</h1>
-                    <p>Select a markdown file from the sidebar to view it here.</p>
+            <div class="content-toolbar" id="content-toolbar">
+                <div class="unified-tab-bar" id="unified-tab-bar"></div>
+                <button class="split-toggle-btn" id="split-toggle-btn" title="화면 분할">&#x25EB;</button>
+            </div>
+            <div class="pane-container" id="pane-container">
+                <div class="pane active-pane" id="pane-1" data-pane-id="1">
+                    <div class="pane-content" id="pane-content-1">
+                        <div class="markdown-viewer" id="markdown-viewer-1">
+                            <div class="welcome">
+                                <h1>Markdown Viewer</h1>
+                                <p>Select a markdown file from the sidebar to view it here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pane" id="pane-2" data-pane-id="2" style="display: none;">
+                    <div class="pane-content" id="pane-content-2">
+                        <div class="markdown-viewer" id="markdown-viewer-2">
+                            <div class="welcome">
+                                <h1>Markdown Viewer</h1>
+                                <p>Select a markdown file from the sidebar to view it here.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -215,6 +235,8 @@ async fn index_handler() -> HttpResponse {
     <script src="/static/js/websocket-client.js"></script>
     <script src="/static/js/file-browser.js"></script>
     <script src="/static/js/markdown-viewer.js"></script>
+    <script src="/static/js/context-menu.js"></script>
+    <script src="/static/js/tab-manager.js"></script>
     <script src="/static/js/management.js"></script>
     <script src="/static/js/app.js"></script>
 </body>

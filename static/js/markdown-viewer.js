@@ -4,6 +4,7 @@ class MarkdownViewer {
         this.currentPath = null;
         this.currentEnvId = null;
         this.currentProjectId = null;
+        this.onLinkClick = null;
     }
 
     async loadFile(envId, projectId, path) {
@@ -112,8 +113,12 @@ class MarkdownViewer {
 
                     console.log('Link clicked:', href, '-> resolved to:', targetPath);
 
-                    // Load the target file
-                    this.loadFile(targetPath).then(() => {
+                    // Load the target file via callback or fallback
+                    const loadPromise = this.onLinkClick
+                        ? this.onLinkClick(this.currentEnvId, this.currentProjectId, targetPath)
+                        : this.loadFile(this.currentEnvId, this.currentProjectId, targetPath);
+
+                    loadPromise.then(() => {
                         // Scroll to anchor if present
                         if (anchor) {
                             setTimeout(() => {
