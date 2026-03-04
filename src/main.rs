@@ -2,6 +2,7 @@ mod config;
 mod file_browser;
 mod file_watcher;
 mod markdown;
+mod project_manager;
 mod routes;
 mod websocket;
 
@@ -13,6 +14,7 @@ use tokio::sync::broadcast;
 
 use config::Config;
 use file_watcher::FileWatcherService;
+use project_manager::ProjectManager;
 use routes::AppState;
 use websocket::WsMessage;
 
@@ -22,35 +24,55 @@ async fn main() -> std::io::Result<()> {
 
     let config = Config::parse_args();
 
-    // Validate watch directory
-    if !config.watch_dir.exists() {
-        eprintln!("Error: Directory does not exist: {:?}", config.watch_dir);
-        std::process::exit(1);
-    }
+    // Initialize project manager
+    let project_manager = Arc::new(
+        ProjectManager::new().expect("Failed to initialize project manager")
+    );
 
-    if !config.watch_dir.is_dir() {
-        eprintln!("Error: Path is not a directory: {:?}", config.watch_dir);
-        std::process::exit(1);
-    }
+    // Determine watch directory (optional now - projects are loaded on demand)
+    let watch_dir = if let Some(dir) = config.watch_dir.clone() {
+        // Use command-line argument
+        Some(dir)
+    } else if let Some(dir) = project_manager.get_current_watch_dir() {
+        // Use project config for initial file watcher
+        log::info!("Using watch directory from project config");
+        Some(dir)
+    } else {
+        log::info!("No initial watch directory - files will be loaded per project");
+        None
+    };
 
     log::info!("Starting markdown viewer");
-    log::info!("Watching directory: {:?}", config.watch_dir);
     log::info!("Server URL: {}", config.server_url());
 
     // Create broadcast channel for file changes
     let (broadcast_tx, _) = broadcast::channel::<WsMessage>(100);
 
-    // Start file watcher
-    let _watcher = FileWatcherService::new(
-        &config.watch_dir,
-        broadcast_tx.clone(),
-        Duration::from_millis(config.debounce_ms),
-    )
-    .expect("Failed to start file watcher");
+    // Start file watcher if we have a watch directory
+    let _watcher = if let Some(ref dir) = watch_dir {
+        // Validate watch directory
+        if !dir.exists() {
+            eprintln!("Warning: Directory does not exist: {:?}", dir);
+            None
+        } else if !dir.is_dir() {
+            eprintln!("Warning: Path is not a directory: {:?}", dir);
+            None
+        } else {
+            log::info!("Watching directory: {:?}", dir);
+            Some(FileWatcherService::new(
+                dir,
+                broadcast_tx.clone(),
+                Duration::from_millis(config.debounce_ms),
+            )
+            .expect("Failed to start file watcher"))
+        }
+    } else {
+        None
+    };
 
     // Create app state
     let app_state = Arc::new(AppState {
-        watch_dir: config.watch_dir.clone(),
+        project_manager: project_manager.clone(),
     });
 
     let bind_address = config.bind_address();
@@ -76,12 +98,28 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/ws").route(web::get().to(websocket::websocket_handler)))
             .service(web::resource("/api/files").route(web::get().to(routes::get_files)))
             .service(
-                web::resource("/api/file/{path:.*}")
+                web::resource("/api/file/{env_id}/{project_id}/{path:.*}")
                     .route(web::get().to(routes::get_file_content)),
             )
             .service(
-                web::resource("/api/render/{path:.*}")
+                web::resource("/api/render/{env_id}/{project_id}/{path:.*}")
                     .route(web::get().to(routes::render_markdown)),
+            )
+            // Project management API
+            .service(web::resource("/api/config").route(web::get().to(routes::get_config)))
+            .service(web::resource("/api/project-tree").route(web::get().to(routes::get_project_tree)))
+            .service(web::resource("/api/project-files/{env_id}/{project_id}").route(web::get().to(routes::get_project_files)))
+            .service(
+                web::resource("/api/environments")
+                    .route(web::post().to(routes::add_environment))
+                    .route(web::put().to(routes::update_environment))
+                    .route(web::delete().to(routes::delete_environment))
+            )
+            .service(
+                web::resource("/api/projects")
+                    .route(web::post().to(routes::add_project))
+                    .route(web::put().to(routes::update_project))
+                    .route(web::delete().to(routes::delete_project))
             )
             .service(fs::Files::new("/static", "./static"))
             .service(web::resource("/").route(web::get().to(index_handler)))
@@ -105,10 +143,37 @@ async fn index_handler() -> HttpResponse {
     <div class="app-container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h2>Files</h2>
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="files">파일</button>
+                    <button class="tab-button" data-tab="management">관리</button>
+                </div>
             </div>
-            <div class="file-tree" id="file-tree">
-                Loading...
+            <div class="tab-content active" id="files-tab">
+                <div class="file-tree" id="file-tree">
+                    Loading...
+                </div>
+            </div>
+            <div class="tab-content" id="management-tab">
+                <div class="management-container">
+                    <div class="env-selector">
+                        <label>현재 환경:</label>
+                        <select id="env-select">
+                            <option value="">로딩중...</option>
+                        </select>
+                    </div>
+                    <div class="env-actions">
+                        <button id="add-env-btn" class="icon-btn icon-btn-add" title="환경 추가">+</button>
+                        <button id="edit-env-btn" class="icon-btn icon-btn-edit" title="환경 수정">✎</button>
+                        <button id="delete-env-btn" class="icon-btn icon-btn-delete" title="환경 삭제">×</button>
+                    </div>
+                    <div class="projects-section">
+                        <h3>프로젝트 목록</h3>
+                        <div id="projects-list">
+                            로딩중...
+                        </div>
+                        <button id="add-project-btn" class="icon-btn icon-btn-add icon-btn-full" title="프로젝트 추가">+ 프로젝트 추가</button>
+                    </div>
+                </div>
             </div>
         </aside>
         <main class="content">
@@ -121,6 +186,25 @@ async fn index_handler() -> HttpResponse {
         </main>
     </div>
 
+    <!-- Modal Dialog -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="modal-title"></h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="modal-message"></p>
+                <input type="text" id="modal-input" class="modal-input" style="display: none;">
+                <input type="text" id="modal-input2" class="modal-input" style="display: none;">
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel" class="btn btn-secondary">취소</button>
+                <button id="modal-confirm" class="btn btn-primary">확인</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/vendor/highlight.min.js"></script>
     <script src="/static/vendor/katex.min.js"></script>
     <script src="/static/vendor/auto-render.min.js"></script>
@@ -128,6 +212,7 @@ async fn index_handler() -> HttpResponse {
     <script src="/static/js/websocket-client.js"></script>
     <script src="/static/js/file-browser.js"></script>
     <script src="/static/js/markdown-viewer.js"></script>
+    <script src="/static/js/management.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>"#;

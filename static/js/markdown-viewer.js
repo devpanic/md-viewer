@@ -2,14 +2,19 @@ class MarkdownViewer {
     constructor(container) {
         this.container = container;
         this.currentPath = null;
+        this.currentEnvId = null;
+        this.currentProjectId = null;
     }
 
-    async loadFile(path) {
+    async loadFile(envId, projectId, path) {
+        this.currentEnvId = envId;
+        this.currentProjectId = projectId;
         this.currentPath = path;
         this.container.innerHTML = '<div class="loading">Loading...</div>';
 
         try {
-            const response = await fetch('/api/render/' + encodeURIComponent(path.replace(/^\//, '')));
+            const cleanPath = path.replace(/^\//, '');
+            const response = await fetch(`/api/render/${envId}/${projectId}/${encodeURIComponent(cleanPath)}`);
 
             if (!response.ok) {
                 throw new Error('Failed to load file');
@@ -158,8 +163,8 @@ class MarkdownViewer {
     }
 
     async refresh() {
-        if (this.currentPath) {
-            await this.loadFile(this.currentPath);
+        if (this.currentPath && this.currentEnvId && this.currentProjectId) {
+            await this.loadFile(this.currentEnvId, this.currentProjectId, this.currentPath);
         }
     }
 }

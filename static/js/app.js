@@ -35,11 +35,11 @@ function initialize() {
     markdownViewer = new MarkdownViewer(viewerContainer);
     wsClient = new WebSocketClient();
 
-    fileBrowser.loadFiles();
+    fileBrowser.loadProjectTree();
 
-    fileBrowser.on('file-selected', (path) => {
-        console.log('File selected:', path);
-        markdownViewer.loadFile(path);
+    fileBrowser.on('file-selected', (data) => {
+        console.log('File selected:', data);
+        markdownViewer.loadFile(data.envId, data.projectId, data.path);
     });
 
     wsClient.on('file_changed', (data) => {
@@ -51,17 +51,17 @@ function initialize() {
 
     wsClient.on('file_created', (data) => {
         console.log('File created:', data.path);
-        fileBrowser.loadFiles();
+        fileBrowser.loadProjectTree();
     });
 
     wsClient.on('file_deleted', (data) => {
         console.log('File deleted:', data.path);
-        fileBrowser.loadFiles();
+        fileBrowser.loadProjectTree();
     });
 
     wsClient.on('tree_updated', () => {
         console.log('Tree updated');
-        fileBrowser.loadFiles();
+        fileBrowser.loadProjectTree();
     });
 
     wsClient.on('connected', () => {

@@ -5,9 +5,9 @@ use std::path::PathBuf;
 #[command(name = "md_viewer")]
 #[command(about = "A real-time markdown viewer with live file watching", long_about = None)]
 pub struct Config {
-    /// Directory to watch for markdown files
+    /// Directory to watch for markdown files (optional, uses project config if not provided)
     #[arg(value_name = "DIRECTORY")]
-    pub watch_dir: PathBuf,
+    pub watch_dir: Option<PathBuf>,
 
     /// Host to bind the server to
     #[arg(short = 'H', long, default_value = "127.0.0.1")]

@@ -4,13 +4,23 @@ use std::sync::Arc;
 
 use crate::file_browser;
 use crate::markdown;
+use crate::project_manager::ProjectManager;
 
 pub struct AppState {
-    pub watch_dir: PathBuf,
+    pub project_manager: Arc<ProjectManager>,
 }
 
 pub async fn get_files(data: web::Data<Arc<AppState>>) -> Result<HttpResponse> {
-    match file_browser::build_file_tree(&data.watch_dir) {
+    let watch_dir = match data.project_manager.get_current_watch_dir() {
+        Some(dir) => dir,
+        None => {
+            return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+                "error": "No project selected. Please select a project in the management tab."
+            })));
+        }
+    };
+
+    match file_browser::build_file_tree(&watch_dir) {
         Ok(tree) => Ok(HttpResponse::Ok().json(tree)),
         Err(e) => {
             log::error!("Failed to build file tree: {}", e);
@@ -21,23 +31,52 @@ pub async fn get_files(data: web::Data<Arc<AppState>>) -> Result<HttpResponse> {
     }
 }
 
+#[derive(serde::Deserialize)]
+pub struct FilePathParams {
+    env_id: String,
+    project_id: String,
+    path: String,
+}
+
 pub async fn get_file_content(
-    path: web::Path<String>,
+    params: web::Path<FilePathParams>,
     data: web::Data<Arc<AppState>>,
 ) -> Result<HttpResponse> {
-    let requested_path = path.into_inner();
-    
+    let config = data.project_manager.get_config();
+
+    // Find environment
+    let env = match config.environments.iter().find(|e| e.id == params.env_id) {
+        Some(e) => e,
+        None => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": "Environment not found"
+            })));
+        }
+    };
+
+    // Find project
+    let project = match env.projects.iter().find(|p| p.id == params.project_id) {
+        Some(p) => p,
+        None => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": "Project not found"
+            })));
+        }
+    };
+
+    let watch_dir = PathBuf::from(&project.path);
+
     // Security: prevent path traversal
-    if requested_path.contains("..") {
+    if params.path.contains("..") {
         return Ok(HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Invalid path"
         })));
     }
 
-    let full_path = data.watch_dir.join(requested_path.trim_start_matches('/'));
+    let full_path = watch_dir.join(params.path.trim_start_matches('/'));
 
     // Ensure the path is within the watch directory
-    if !full_path.starts_with(&data.watch_dir) {
+    if !full_path.starts_with(&watch_dir) {
         return Ok(HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Invalid path"
         })));
@@ -55,22 +94,44 @@ pub async fn get_file_content(
 }
 
 pub async fn render_markdown(
-    path: web::Path<String>,
+    params: web::Path<FilePathParams>,
     data: web::Data<Arc<AppState>>,
 ) -> Result<HttpResponse> {
-    let requested_path = path.into_inner();
-    
+    let config = data.project_manager.get_config();
+
+    // Find environment
+    let env = match config.environments.iter().find(|e| e.id == params.env_id) {
+        Some(e) => e,
+        None => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": "Environment not found"
+            })));
+        }
+    };
+
+    // Find project
+    let project = match env.projects.iter().find(|p| p.id == params.project_id) {
+        Some(p) => p,
+        None => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": "Project not found"
+            })));
+        }
+    };
+
+    let watch_dir = PathBuf::from(&project.path);
+
     // Security: prevent path traversal
-    if requested_path.contains("..") {
+    if params.path.contains("..") {
         return Ok(HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Invalid path"
         })));
     }
 
-    let full_path = data.watch_dir.join(requested_path.trim_start_matches('/'));
+    let full_path = watch_dir.join(params.path.trim_start_matches('/'));
 
     // Ensure the path is within the watch directory
-    if !full_path.starts_with(&data.watch_dir) {
+    if !full_path.starts_with(&watch_dir) {
         return Ok(HttpResponse::BadRequest().json(serde_json::json!({
             "error": "Invalid path"
         })));
@@ -89,3 +150,208 @@ pub async fn render_markdown(
         }
     }
 }
+
+// Project management API endpoints
+
+pub async fn get_config(data: web::Data<Arc<AppState>>) -> Result<HttpResponse> {
+    let config = data.project_manager.get_config();
+    Ok(HttpResponse::Ok().json(config))
+}
+
+pub async fn get_project_tree(data: web::Data<Arc<AppState>>) -> Result<HttpResponse> {
+    let config = data.project_manager.get_config();
+    Ok(HttpResponse::Ok().json(config))
+}
+
+#[derive(serde::Deserialize)]
+pub struct ProjectFilesPath {
+    env_id: String,
+    project_id: String,
+}
+
+pub async fn get_project_files(
+    path: web::Path<ProjectFilesPath>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    let config = data.project_manager.get_config();
+
+    // Find environment
+    let env = match config.environments.iter().find(|e| e.id == path.env_id) {
+        Some(e) => e,
+        None => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": "Environment not found"
+            })));
+        }
+    };
+
+    // Find project
+    let project = match env.projects.iter().find(|p| p.id == path.project_id) {
+        Some(p) => p,
+        None => {
+            return Ok(HttpResponse::NotFound().json(serde_json::json!({
+                "error": "Project not found"
+            })));
+        }
+    };
+
+    let project_path = PathBuf::from(&project.path);
+
+    // Check if path exists
+    if !project_path.exists() {
+        return Ok(HttpResponse::NotFound().json(serde_json::json!({
+            "error": "Project path does not exist"
+        })));
+    }
+
+    match file_browser::build_file_tree(&project_path) {
+        Ok(tree) => Ok(HttpResponse::Ok().json(tree)),
+        Err(e) => {
+            log::error!("Failed to build file tree for project {}: {}", path.project_id, e);
+            Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                "error": "Failed to build file tree"
+            })))
+        }
+    }
+}
+
+
+#[derive(serde::Deserialize)]
+pub struct AddEnvironmentRequest {
+    id: String,
+    name: String,
+}
+
+pub async fn add_environment(
+    req: web::Json<AddEnvironmentRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.add_environment(req.id.clone(), req.name.clone()) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Environment added successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateEnvironmentRequest {
+    id: String,
+    name: String,
+}
+
+pub async fn update_environment(
+    req: web::Json<UpdateEnvironmentRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.update_environment(req.id.clone(), req.name.clone()) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Environment updated successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DeleteEnvironmentRequest {
+    id: String,
+}
+
+pub async fn delete_environment(
+    req: web::Json<DeleteEnvironmentRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.delete_environment(req.id.clone()) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Environment deleted successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct AddProjectRequest {
+    env_id: String,
+    id: String,
+    name: String,
+    path: String,
+}
+
+pub async fn add_project(
+    req: web::Json<AddProjectRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.add_project(
+        req.env_id.clone(),
+        req.id.clone(),
+        req.name.clone(),
+        req.path.clone(),
+    ) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Project added successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateProjectRequest {
+    env_id: String,
+    id: String,
+    name: String,
+    path: String,
+}
+
+pub async fn update_project(
+    req: web::Json<UpdateProjectRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.update_project(
+        req.env_id.clone(),
+        req.id.clone(),
+        req.name.clone(),
+        req.path.clone(),
+    ) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Project updated successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DeleteProjectRequest {
+    env_id: String,
+    project_id: String,
+}
+
+pub async fn delete_project(
+    req: web::Json<DeleteProjectRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.delete_project(req.env_id.clone(), req.project_id.clone()) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Project deleted successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+
