@@ -310,6 +310,29 @@ body {
     margin-right: 6px;
 }
 
+.viewer-tab-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    font-size: 13px;
+    line-height: 1;
+    color: #959da5;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-right: 2px;
+    transition: all 0.15s;
+}
+
+.viewer-tab-refresh:hover {
+    background: #3498db;
+    color: #fff;
+}
+
 .viewer-tab-close {
     display: inline-flex;
     align-items: center;

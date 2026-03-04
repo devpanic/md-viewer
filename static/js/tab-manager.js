@@ -254,6 +254,20 @@ class TabManager {
             labelEl.textContent = tab.label;
             tabEl.appendChild(labelEl);
 
+            // Refresh button (active tabs only)
+            if (paneShowing) {
+                const refreshEl = document.createElement('button');
+                refreshEl.className = 'viewer-tab-refresh';
+                refreshEl.innerHTML = '&#x21bb;';
+                refreshEl.title = '새로고침';
+                refreshEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    this.refreshTab(tabId, paneShowing);
+                });
+                tabEl.appendChild(refreshEl);
+            }
+
             const closeEl = document.createElement('button');
             closeEl.className = 'viewer-tab-close';
             closeEl.innerHTML = '&times;';
@@ -288,6 +302,19 @@ class TabManager {
             });
 
             this.tabBarEl.appendChild(tabEl);
+        });
+    }
+
+    refreshTab(tabId, paneId) {
+        const tab = this.tabs.get(tabId);
+        const pane = this.panes[paneId];
+        if (!tab || !pane) return;
+
+        this.saveScrollPosition(paneId);
+        const scrollTop = pane.contentEl.scrollTop;
+
+        pane.viewer.loadFile(tab.envId, tab.projectId, tab.path).then(() => {
+            pane.contentEl.scrollTop = scrollTop;
         });
     }
 
