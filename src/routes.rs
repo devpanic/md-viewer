@@ -1,13 +1,15 @@
 use actix_web::{web, HttpResponse, Result};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::file_browser;
+use crate::file_watcher::FileWatcherService;
 use crate::markdown;
 use crate::project_manager::ProjectManager;
 
 pub struct AppState {
     pub project_manager: Arc<ProjectManager>,
+    pub file_watcher: Arc<Mutex<FileWatcherService>>,
 }
 
 pub async fn get_files(data: web::Data<Arc<AppState>>) -> Result<HttpResponse> {
@@ -296,10 +298,17 @@ pub async fn add_project(
         req.name.clone(),
         req.path.clone(),
     ) {
-        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
-            "success": true,
-            "message": "Project added successfully"
-        }))),
+        Ok(_) => {
+            // Register new project with file watcher
+            let path = PathBuf::from(&req.path);
+            if let Ok(mut watcher) = data.file_watcher.lock() {
+                let _ = watcher.watch_project(&path, &req.env_id, &req.id);
+            }
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "success": true,
+                "message": "Project added successfully"
+            })))
+        }
         Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
             "error": e.to_string()
         }))),
@@ -345,10 +354,16 @@ pub async fn delete_project(
     data: web::Data<Arc<AppState>>,
 ) -> Result<HttpResponse> {
     match data.project_manager.delete_project(req.env_id.clone(), req.project_id.clone()) {
-        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
-            "success": true,
-            "message": "Project deleted successfully"
-        }))),
+        Ok(_) => {
+            // Unregister project from file watcher
+            if let Ok(mut watcher) = data.file_watcher.lock() {
+                watcher.unwatch_project(&req.env_id, &req.project_id);
+            }
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "success": true,
+                "message": "Project deleted successfully"
+            })))
+        }
         Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
             "error": e.to_string()
         }))),

@@ -76,23 +76,18 @@ function initialize() {
     });
 
     wsClient.on('file_changed', (data) => {
-        console.log('File changed:', data.path);
+        console.log('File changed:', data.path, data.env_id, data.project_id);
         tabManager.refreshTabsByPath(data.path);
     });
 
     wsClient.on('file_created', (data) => {
-        console.log('File created:', data.path);
-        fileBrowser.loadProjectTree();
+        console.log('File created:', data.path, data.env_id, data.project_id);
+        fileBrowser.refreshProject(data.env_id, data.project_id);
     });
 
     wsClient.on('file_deleted', (data) => {
-        console.log('File deleted:', data.path);
-        fileBrowser.loadProjectTree();
-    });
-
-    wsClient.on('tree_updated', () => {
-        console.log('Tree updated');
-        fileBrowser.loadProjectTree();
+        console.log('File deleted:', data.path, data.env_id, data.project_id);
+        fileBrowser.refreshProject(data.env_id, data.project_id);
     });
 
     wsClient.on('connected', () => {
@@ -102,6 +97,7 @@ function initialize() {
     wsClient.on('disconnected', () => {
         console.log('WebSocket disconnected');
     });
+
 
     // Sidebar toggle
     const sidebar = document.getElementById('sidebar');

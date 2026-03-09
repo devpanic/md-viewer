@@ -334,6 +334,40 @@ class FileBrowser {
     }
 
 
+    async refreshProject(envId, projectId) {
+        const projectKey = `project:${envId}:${projectId}`;
+
+        // Clear cache for this project
+        this.projectFileCache.delete(projectKey);
+
+        // If this project is currently expanded, reload its files
+        if (!this.collapsedNodes.has(projectKey)) {
+            await this.loadProjectFiles(envId, projectId);
+        }
+
+        // Re-render without resetting collapse state
+        await this.render();
+    }
+
+    async refreshAllFiles() {
+        // Clear all file caches
+        this.projectFileCache.clear();
+
+        // Reload files for all expanded projects
+        if (this.config) {
+            for (const env of this.config.environments) {
+                for (const project of env.projects) {
+                    const projectKey = `project:${env.id}:${project.id}`;
+                    if (!this.collapsedNodes.has(projectKey)) {
+                        await this.loadProjectFiles(env.id, project.id);
+                    }
+                }
+            }
+        }
+
+        await this.render();
+    }
+
     selectFile(envId, projectId, path) {
         const fileKey = `${envId}:${projectId}:${path}`;
         this.currentFile = fileKey;

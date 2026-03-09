@@ -8,7 +8,8 @@ mod websocket;
 
 use actix_files as fs;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::broadcast;
 
@@ -29,50 +30,41 @@ async fn main() -> std::io::Result<()> {
         ProjectManager::new().expect("Failed to initialize project manager")
     );
 
-    // Determine watch directory (optional now - projects are loaded on demand)
-    let watch_dir = if let Some(dir) = config.watch_dir.clone() {
-        // Use command-line argument
-        Some(dir)
-    } else if let Some(dir) = project_manager.get_current_watch_dir() {
-        // Use project config for initial file watcher
-        log::info!("Using watch directory from project config");
-        Some(dir)
-    } else {
-        log::info!("No initial watch directory - files will be loaded per project");
-        None
-    };
-
     log::info!("Starting markdown viewer");
     log::info!("Server URL: {}", config.server_url());
 
     // Create broadcast channel for file changes
     let (broadcast_tx, _) = broadcast::channel::<WsMessage>(100);
 
-    // Start file watcher if we have a watch directory
-    let _watcher = if let Some(ref dir) = watch_dir {
-        // Validate watch directory
-        if !dir.exists() {
-            eprintln!("Warning: Directory does not exist: {:?}", dir);
-            None
-        } else if !dir.is_dir() {
-            eprintln!("Warning: Path is not a directory: {:?}", dir);
-            None
-        } else {
-            log::info!("Watching directory: {:?}", dir);
-            Some(FileWatcherService::new(
-                dir,
-                broadcast_tx.clone(),
-                Duration::from_millis(config.debounce_ms),
-            )
-            .expect("Failed to start file watcher"))
+    // Start file watcher and register all project directories
+    let mut watcher = FileWatcherService::new(
+        broadcast_tx.clone(),
+        Duration::from_millis(config.debounce_ms),
+    )
+    .expect("Failed to start file watcher");
+
+    // Register CLI watch directory if provided
+    if let Some(ref dir) = config.watch_dir {
+        if dir.exists() && dir.is_dir() {
+            let _ = watcher.watch_project(dir, "_cli", "_cli");
         }
-    } else {
-        None
-    };
+    }
+
+    // Register all project directories from config
+    let prj_config = project_manager.get_config();
+    for env in &prj_config.environments {
+        for project in &env.projects {
+            let path = PathBuf::from(&project.path);
+            let _ = watcher.watch_project(&path, &env.id, &project.id);
+        }
+    }
+
+    let file_watcher = Arc::new(Mutex::new(watcher));
 
     // Create app state
     let app_state = Arc::new(AppState {
         project_manager: project_manager.clone(),
+        file_watcher: file_watcher.clone(),
     });
 
     let bind_address = config.bind_address();
@@ -181,11 +173,11 @@ async fn index_handler() -> HttpResponse {
         </button>
         <main class="content">
             <div class="content-toolbar" id="content-toolbar">
-                <div class="unified-tab-bar" id="unified-tab-bar"></div>
                 <button class="split-toggle-btn" id="split-toggle-btn" title="화면 분할">&#x25EB;</button>
             </div>
             <div class="pane-container" id="pane-container">
                 <div class="pane active-pane" id="pane-1" data-pane-id="1">
+                    <div class="pane-tab-bar" id="pane-tab-bar-1"></div>
                     <div class="pane-content" id="pane-content-1">
                         <div class="markdown-viewer" id="markdown-viewer-1">
                             <div class="welcome">
@@ -196,6 +188,7 @@ async fn index_handler() -> HttpResponse {
                     </div>
                 </div>
                 <div class="pane" id="pane-2" data-pane-id="2" style="display: none;">
+                    <div class="pane-tab-bar" id="pane-tab-bar-2"></div>
                     <div class="pane-content" id="pane-content-2">
                         <div class="markdown-viewer" id="markdown-viewer-2">
                             <div class="welcome">

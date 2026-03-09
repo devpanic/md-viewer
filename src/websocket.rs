@@ -8,10 +8,21 @@ use tokio::sync::broadcast;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WsMessage {
-    FileChanged { path: String },
-    FileCreated { path: String },
-    FileDeleted { path: String },
-    TreeUpdated,
+    FileChanged {
+        path: String,
+        env_id: String,
+        project_id: String,
+    },
+    FileCreated {
+        path: String,
+        env_id: String,
+        project_id: String,
+    },
+    FileDeleted {
+        path: String,
+        env_id: String,
+        project_id: String,
+    },
 }
 
 pub async fn websocket_handler(
