@@ -184,47 +184,29 @@ body {
 /* Content toolbar */
 .content-toolbar {
     display: flex;
-    align-items: stretch;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 2px 6px;
     background: #f6f8fa;
     border-bottom: 1px solid #e1e4e8;
     flex-shrink: 0;
-    min-height: 32px;
-}
-
-/* Unified tab bar */
-.unified-tab-bar {
-    flex: 1;
-    display: flex;
-    align-items: stretch;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: thin;
-    min-width: 0;
-}
-
-.unified-tab-bar::-webkit-scrollbar {
-    height: 3px;
-}
-
-.unified-tab-bar::-webkit-scrollbar-thumb {
-    background: #d1d5da;
-    border-radius: 3px;
+    min-height: 28px;
 }
 
 .split-toggle-btn {
     background: none;
-    border: none;
-    border-left: 1px solid #e1e4e8;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
     color: #586069;
     cursor: pointer;
     font-size: 16px;
-    width: 32px;
+    width: 26px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
     padding: 0;
-    flex-shrink: 0;
 }
 
 .split-toggle-btn:hover {
@@ -235,6 +217,33 @@ body {
 .split-toggle-btn.active {
     background: #3498db;
     color: #fff;
+    border-color: #3498db;
+}
+
+/* Pane tab bar */
+.pane-tab-bar {
+    display: flex;
+    align-items: stretch;
+    background: #f6f8fa;
+    border-bottom: 1px solid #e1e4e8;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-shrink: 0;
+    min-height: 0;
+    scrollbar-width: thin;
+}
+
+.pane-tab-bar:empty {
+    display: none;
+}
+
+.pane-tab-bar::-webkit-scrollbar {
+    height: 3px;
+}
+
+.pane-tab-bar::-webkit-scrollbar-thumb {
+    background: #d1d5da;
+    border-radius: 3px;
 }
 
 /* Pane container */
@@ -277,33 +286,23 @@ body {
     background: #e9ecef;
 }
 
+.viewer-tab.dragging {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.viewer-tab.drag-over-left {
+    box-shadow: inset 3px 0 0 #3498db;
+}
+
+.viewer-tab.drag-over-right {
+    box-shadow: inset -3px 0 0 #3498db;
+}
+
 .viewer-tab.active {
     background: #fff;
     color: #24292e;
     box-shadow: inset 0 -2px 0 #3498db;
-}
-
-.viewer-tab.active.pane-2 {
-    box-shadow: inset 0 -2px 0 #27ae60;
-}
-
-.viewer-tab-pane-indicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: 700;
-    margin-right: 4px;
-    flex-shrink: 0;
-    color: #fff;
-    background: #3498db;
-}
-
-.viewer-tab.pane-2 .viewer-tab-pane-indicator {
-    background: #27ae60;
 }
 
 .viewer-tab-label {

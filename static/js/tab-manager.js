@@ -1,17 +1,16 @@
 class TabManager {
     constructor() {
         this.tabs = new Map();
-        this.tabOrder = [];
         this.panes = {};
         this.activePaneId = '1';
         this.isSplit = false;
         this.nextTabId = 1;
+        this.draggedTabId = null;
     }
 
     init() {
         this.paneContainer = document.getElementById('pane-container');
         this.splitToggleBtn = document.getElementById('split-toggle-btn');
-        this.tabBarEl = document.getElementById('unified-tab-bar');
 
         ['1', '2'].forEach(id => {
             const paneEl = document.getElementById('pane-' + id);
@@ -26,9 +25,11 @@ class TabManager {
 
             this.panes[id] = {
                 el: paneEl,
+                tabBarEl: document.getElementById('pane-tab-bar-' + id),
                 contentEl: contentEl,
                 viewerContainer: viewerContainer,
                 viewer: viewer,
+                tabOrder: [],
                 activeTabId: null
             };
 
@@ -69,89 +70,69 @@ class TabManager {
         return null;
     }
 
-    // Which pane is currently displaying this tab? (null if none visible)
-    findPaneShowingTab(tabId) {
-        for (const [id, pane] of Object.entries(this.panes)) {
-            if (pane.activeTabId === tabId) {
-                if (id === '1' || this.isSplit) return id;
-            }
-        }
-        return null;
-    }
-
-    // Left-click: open tab in active pane (or focus pane already showing it)
+    // Left-click: open in active pane (or switch to existing)
     openTab(envId, projectId, path) {
         const existing = this.findTabByPath(envId, projectId, path);
         if (existing) {
-            const showingIn = this.findPaneShowingTab(existing.id);
-            if (showingIn) {
-                this.setActivePane(showingIn);
-                this.renderTabBar();
-                return Promise.resolve();
-            }
-            return this.showTabInPane(existing.id, this.activePaneId);
+            this.setActivePane(existing.paneId);
+            this.switchTab(existing.id);
+            return Promise.resolve();
         }
-        return this.createAndShowTab(envId, projectId, path, this.activePaneId);
+        return this.openTabInPane(envId, projectId, path, this.activePaneId);
     }
 
-    // Context-menu: open tab in a specific pane
-    openTabInPane(envId, projectId, path, paneId) {
+    // Context-menu or link-click: open in specific pane
+    async openTabInPane(envId, projectId, path, paneId) {
         const existing = this.findTabByPath(envId, projectId, path);
         if (existing) {
+            if (existing.paneId !== paneId) {
+                this.moveTabToPane(existing.id, paneId);
+            }
             this.setActivePane(paneId);
-            return this.showTabInPane(existing.id, paneId);
+            this.switchTab(existing.id);
+            return;
         }
-        return this.createAndShowTab(envId, projectId, path, paneId);
-    }
 
-    async createAndShowTab(envId, projectId, path, paneId) {
-        const tabId = this.generateTabId();
-        const label = path.split('/').pop() || path;
-        const tab = { id: tabId, envId, projectId, path, label, scrollPositions: {} };
-
-        this.tabs.set(tabId, tab);
-        this.tabOrder.push(tabId);
-
-        this.setActivePane(paneId);
-        await this.showTabInPane(tabId, paneId);
-    }
-
-    async showTabInPane(tabId, paneId) {
-        const tab = this.tabs.get(tabId);
         const pane = this.panes[paneId];
-        if (!tab || !pane) return;
+        if (!pane) return;
 
         this.saveScrollPosition(paneId);
 
-        pane.activeTabId = tabId;
-        this.renderTabBar();
+        const tabId = this.generateTabId();
+        const label = path.split('/').pop() || path;
+        const tab = { id: tabId, envId, projectId, path, label, paneId, scrollPosition: 0 };
 
-        await pane.viewer.loadFile(tab.envId, tab.projectId, tab.path);
-        pane.contentEl.scrollTop = tab.scrollPositions[paneId] || 0;
+        this.tabs.set(tabId, tab);
+        pane.tabOrder.push(tabId);
+        pane.activeTabId = tabId;
+
+        this.setActivePane(paneId);
+        this.renderTabBar(paneId);
+
+        await pane.viewer.loadFile(envId, projectId, path);
     }
 
     closeTab(tabId) {
         const tab = this.tabs.get(tabId);
         if (!tab) return;
 
-        const idx = this.tabOrder.indexOf(tabId);
+        const paneId = tab.paneId;
+        const pane = this.panes[paneId];
+        const idx = pane.tabOrder.indexOf(tabId);
         if (idx === -1) return;
 
-        this.tabOrder.splice(idx, 1);
+        pane.tabOrder.splice(idx, 1);
         this.tabs.delete(tabId);
 
-        // Update every pane that was showing this tab
-        for (const [paneId, pane] of Object.entries(this.panes)) {
-            if (pane.activeTabId !== tabId) continue;
-
-            if (this.tabOrder.length > 0) {
-                const newIdx = Math.min(idx, this.tabOrder.length - 1);
-                const newTabId = this.tabOrder[newIdx];
+        if (pane.activeTabId === tabId) {
+            if (pane.tabOrder.length > 0) {
+                const newIdx = Math.min(idx, pane.tabOrder.length - 1);
+                const newTabId = pane.tabOrder[newIdx];
                 pane.activeTabId = newTabId;
                 const newTab = this.tabs.get(newTabId);
                 if (newTab) {
                     pane.viewer.loadFile(newTab.envId, newTab.projectId, newTab.path).then(() => {
-                        pane.contentEl.scrollTop = newTab.scrollPositions[paneId] || 0;
+                        pane.contentEl.scrollTop = newTab.scrollPosition;
                     });
                 }
             } else {
@@ -160,7 +141,52 @@ class TabManager {
             }
         }
 
-        this.renderTabBar();
+        this.renderTabBar(paneId);
+    }
+
+    switchTab(tabId) {
+        const tab = this.tabs.get(tabId);
+        if (!tab) return;
+
+        const pane = this.panes[tab.paneId];
+        this.saveScrollPosition(tab.paneId);
+
+        pane.activeTabId = tabId;
+        this.renderTabBar(tab.paneId);
+
+        pane.viewer.loadFile(tab.envId, tab.projectId, tab.path).then(() => {
+            pane.contentEl.scrollTop = tab.scrollPosition;
+        });
+    }
+
+    moveTabToPane(tabId, targetPaneId) {
+        const tab = this.tabs.get(tabId);
+        if (!tab || tab.paneId === targetPaneId) return;
+
+        const srcPane = this.panes[tab.paneId];
+        const dstPane = this.panes[targetPaneId];
+        const srcPaneId = tab.paneId;
+
+        const idx = srcPane.tabOrder.indexOf(tabId);
+        if (idx !== -1) srcPane.tabOrder.splice(idx, 1);
+
+        if (srcPane.activeTabId === tabId) {
+            if (srcPane.tabOrder.length > 0) {
+                const newIdx = Math.min(idx, srcPane.tabOrder.length - 1);
+                srcPane.activeTabId = srcPane.tabOrder[newIdx];
+                const t = this.tabs.get(srcPane.activeTabId);
+                if (t) srcPane.viewer.loadFile(t.envId, t.projectId, t.path);
+            } else {
+                srcPane.activeTabId = null;
+                this.showWelcome(srcPaneId);
+            }
+        }
+
+        tab.paneId = targetPaneId;
+        dstPane.tabOrder.push(tabId);
+
+        this.renderTabBar(srcPaneId);
+        this.renderTabBar(targetPaneId);
     }
 
     saveScrollPosition(paneId) {
@@ -168,7 +194,7 @@ class TabManager {
         if (!pane || !pane.activeTabId) return;
         const tab = this.tabs.get(pane.activeTabId);
         if (tab) {
-            tab.scrollPositions[paneId] = pane.contentEl.scrollTop;
+            tab.scrollPosition = pane.contentEl.scrollTop;
         }
     }
 
@@ -186,7 +212,6 @@ class TabManager {
             this.isSplit = true;
             this.panes['2'].el.style.display = '';
             this.splitToggleBtn.classList.add('active');
-            this.renderTabBar();
         }
     }
 
@@ -194,23 +219,33 @@ class TabManager {
         const pane2 = this.panes['2'];
         const pane1 = this.panes['1'];
 
-        // If pane-1 has nothing but pane-2 does, move it over
-        if (pane2.activeTabId && !pane1.activeTabId) {
-            const tab = this.tabs.get(pane2.activeTabId);
+        // Move all pane-2 tabs to pane-1
+        [...pane2.tabOrder].forEach(tabId => {
+            const tab = this.tabs.get(tabId);
             if (tab) {
-                pane1.activeTabId = pane2.activeTabId;
-                pane1.viewer.loadFile(tab.envId, tab.projectId, tab.path);
+                tab.paneId = '1';
+                pane1.tabOrder.push(tabId);
             }
+        });
+
+        // If pane-1 had no active tab, take pane-2's
+        if (!pane1.activeTabId && pane2.activeTabId) {
+            pane1.activeTabId = pane2.activeTabId;
+            const tab = this.tabs.get(pane1.activeTabId);
+            if (tab) pane1.viewer.loadFile(tab.envId, tab.projectId, tab.path);
         }
 
+        pane2.tabOrder = [];
         pane2.activeTabId = null;
         this.showWelcome('2');
 
         this.isSplit = false;
         pane2.el.style.display = 'none';
         this.splitToggleBtn.classList.remove('active');
+
         this.setActivePane('1');
-        this.renderTabBar();
+        this.renderTabBar('1');
+        this.renderTabBar('2');
     }
 
     showWelcome(paneId) {
@@ -222,40 +257,27 @@ class TabManager {
             '</div>';
     }
 
-    renderTabBar() {
-        this.tabBarEl.innerHTML = '';
+    renderTabBar(paneId) {
+        const pane = this.panes[paneId];
+        pane.tabBarEl.innerHTML = '';
 
-        this.tabOrder.forEach(tabId => {
+        pane.tabOrder.forEach(tabId => {
             const tab = this.tabs.get(tabId);
             if (!tab) return;
 
             const tabEl = document.createElement('div');
             tabEl.className = 'viewer-tab';
-
-            // Determine which pane is showing this tab
-            const paneShowing = this.findPaneShowingTab(tabId);
-            if (paneShowing) {
-                tabEl.classList.add('active');
-                if (this.isSplit) {
-                    tabEl.classList.add('pane-' + paneShowing);
-                }
-            }
-
-            // Pane indicator badge (split mode only)
-            if (paneShowing && this.isSplit) {
-                const indicator = document.createElement('span');
-                indicator.className = 'viewer-tab-pane-indicator';
-                indicator.textContent = paneShowing;
-                tabEl.appendChild(indicator);
-            }
+            tabEl.draggable = true;
+            tabEl.dataset.tabId = tabId;
+            if (tabId === pane.activeTabId) tabEl.classList.add('active');
 
             const labelEl = document.createElement('span');
             labelEl.className = 'viewer-tab-label';
             labelEl.textContent = tab.label;
             tabEl.appendChild(labelEl);
 
-            // Refresh button (active tabs only)
-            if (paneShowing) {
+            // Refresh button (active tab only)
+            if (tabId === pane.activeTabId) {
                 const refreshEl = document.createElement('button');
                 refreshEl.className = 'viewer-tab-refresh';
                 refreshEl.innerHTML = '&#x21bb;';
@@ -263,7 +285,7 @@ class TabManager {
                 refreshEl.addEventListener('click', (e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    this.refreshTab(tabId, paneShowing);
+                    this.refreshTab(tabId, paneId);
                 });
                 tabEl.appendChild(refreshEl);
             }
@@ -279,21 +301,16 @@ class TabManager {
             });
             tabEl.appendChild(closeEl);
 
-            // Left click: show in active pane, or focus pane already showing it
+            // Left click to switch
             tabEl.addEventListener('click', (e) => {
                 if (e.target.closest('.viewer-tab-close')) return;
+                if (e.target.closest('.viewer-tab-refresh')) return;
                 e.stopPropagation();
-
-                const showingIn = this.findPaneShowingTab(tabId);
-                if (showingIn) {
-                    this.setActivePane(showingIn);
-                    this.renderTabBar();
-                } else {
-                    this.showTabInPane(tabId, this.activePaneId);
-                }
+                this.setActivePane(paneId);
+                this.switchTab(tabId);
             });
 
-            // Middle click: close
+            // Middle click to close
             tabEl.addEventListener('mousedown', (e) => {
                 if (e.button === 1) {
                     e.preventDefault();
@@ -301,8 +318,62 @@ class TabManager {
                 }
             });
 
-            this.tabBarEl.appendChild(tabEl);
+            // -- Drag and drop --
+            tabEl.addEventListener('dragstart', (e) => {
+                this.draggedTabId = tabId;
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', tabId);
+                requestAnimationFrame(() => tabEl.classList.add('dragging'));
+            });
+
+            tabEl.addEventListener('dragend', () => {
+                this.draggedTabId = null;
+                tabEl.classList.remove('dragging');
+                pane.tabBarEl.querySelectorAll('.drag-over-left, .drag-over-right').forEach(el => {
+                    el.classList.remove('drag-over-left', 'drag-over-right');
+                });
+            });
+
+            tabEl.addEventListener('dragover', (e) => {
+                if (!this.draggedTabId || this.draggedTabId === tabId) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const rect = tabEl.getBoundingClientRect();
+                const mid = rect.left + rect.width / 2;
+                tabEl.classList.toggle('drag-over-left', e.clientX < mid);
+                tabEl.classList.toggle('drag-over-right', e.clientX >= mid);
+            });
+
+            tabEl.addEventListener('dragleave', () => {
+                tabEl.classList.remove('drag-over-left', 'drag-over-right');
+            });
+
+            tabEl.addEventListener('drop', (e) => {
+                e.preventDefault();
+                tabEl.classList.remove('drag-over-left', 'drag-over-right');
+                const draggedId = this.draggedTabId;
+                if (!draggedId || draggedId === tabId) return;
+
+                const rect = tabEl.getBoundingClientRect();
+                const dropAfter = e.clientX >= rect.left + rect.width / 2;
+                this.reorderTab(draggedId, tabId, dropAfter, paneId);
+            });
+
+            pane.tabBarEl.appendChild(tabEl);
         });
+    }
+
+    reorderTab(draggedId, targetId, dropAfter, paneId) {
+        const order = this.panes[paneId].tabOrder;
+        const fromIdx = order.indexOf(draggedId);
+        if (fromIdx === -1) return;
+
+        order.splice(fromIdx, 1);
+        let toIdx = order.indexOf(targetId);
+        if (dropAfter) toIdx++;
+        order.splice(toIdx, 0, draggedId);
+
+        this.renderTabBar(paneId);
     }
 
     refreshTab(tabId, paneId) {
@@ -321,10 +392,9 @@ class TabManager {
     refreshTabsByPath(filePath) {
         for (const [tabId, tab] of this.tabs) {
             if (filePath.endsWith(tab.path)) {
-                for (const [, pane] of Object.entries(this.panes)) {
-                    if (pane.activeTabId === tabId) {
-                        pane.viewer.refresh();
-                    }
+                const pane = this.panes[tab.paneId];
+                if (pane && pane.activeTabId === tabId) {
+                    pane.viewer.refresh();
                 }
             }
         }
