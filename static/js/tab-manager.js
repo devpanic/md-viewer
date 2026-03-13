@@ -320,34 +320,25 @@ class TabManager {
         return el;
     }
 
-    async showBreadcrumbDropdown(dirPath, tab, anchorEl) {
-        this.closeBreadcrumbDropdown();
-
-        if (typeof fileBrowser === 'undefined') return;
-        const projectKey = `project:${tab.envId}:${tab.projectId}`;
-        let fileTree = fileBrowser.projectFileCache.get(projectKey);
-        if (!fileTree) {
-            await fileBrowser.loadProjectFiles(tab.envId, tab.projectId);
-            fileTree = fileBrowser.projectFileCache.get(projectKey);
-            if (!fileTree) return;
-        }
-
-        // Navigate to the target directory node
+    _resolveNode(fileTree, dirPath) {
         let node = fileTree;
         if (dirPath) {
             const pathParts = dirPath.split('/').filter(p => p);
             for (const part of pathParts) {
-                if (!node.children) return;
+                if (!node.children) return null;
                 const child = node.children.find(c => c.name === part && c.is_dir);
-                if (!child) return;
+                if (!child) return null;
                 node = child;
             }
         }
+        return node;
+    }
 
-        if (!node.children || node.children.length === 0) return;
-
+    _buildDropdownMenu(node, tab) {
         const dropdown = document.createElement('div');
         dropdown.className = 'breadcrumb-dropdown';
+
+        if (!node.children || node.children.length === 0) return dropdown;
 
         node.children.forEach(child => {
             const item = document.createElement('div');
@@ -363,12 +354,49 @@ class TabManager {
             }
 
             const label = document.createElement('span');
+            label.className = 'breadcrumb-dropdown-label';
             label.textContent = child.name;
 
             item.appendChild(icon);
             item.appendChild(label);
 
-            if (!child.is_dir) {
+            if (child.is_dir && child.children && child.children.length > 0) {
+                const chevron = document.createElement('span');
+                chevron.className = 'breadcrumb-dropdown-chevron';
+                chevron.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+                item.appendChild(chevron);
+
+                const submenu = this._buildDropdownMenu(child, tab);
+                item.appendChild(submenu);
+
+                item.addEventListener('mouseenter', () => {
+                    // Close sibling submenus
+                    dropdown.querySelectorAll(':scope > .breadcrumb-dropdown-item > .breadcrumb-dropdown.open').forEach(el => {
+                        el.classList.remove('open');
+                    });
+                    // Position with fixed coordinates
+                    const itemRect = item.getBoundingClientRect();
+                    submenu.style.left = itemRect.right + 'px';
+                    submenu.style.top = itemRect.top + 'px';
+                    submenu.classList.add('open');
+                    // Boundary check
+                    requestAnimationFrame(() => {
+                        const sr = submenu.getBoundingClientRect();
+                        if (sr.right > window.innerWidth) {
+                            submenu.style.left = (itemRect.left - sr.width) + 'px';
+                        }
+                        if (sr.bottom > window.innerHeight) {
+                            submenu.style.top = Math.max(4, window.innerHeight - sr.height - 4) + 'px';
+                        }
+                    });
+                });
+
+                item.addEventListener('mouseleave', (e) => {
+                    if (!item.contains(e.relatedTarget)) {
+                        submenu.classList.remove('open');
+                    }
+                });
+            } else if (!child.is_dir) {
                 item.addEventListener('click', (e) => {
                     e.stopPropagation();
                     this.closeBreadcrumbDropdown();
@@ -394,6 +422,26 @@ class TabManager {
 
             dropdown.appendChild(item);
         });
+
+        return dropdown;
+    }
+
+    async showBreadcrumbDropdown(dirPath, tab, anchorEl) {
+        this.closeBreadcrumbDropdown();
+
+        if (typeof fileBrowser === 'undefined') return;
+        const projectKey = `project:${tab.envId}:${tab.projectId}`;
+        let fileTree = fileBrowser.projectFileCache.get(projectKey);
+        if (!fileTree) {
+            await fileBrowser.loadProjectFiles(tab.envId, tab.projectId);
+            fileTree = fileBrowser.projectFileCache.get(projectKey);
+            if (!fileTree) return;
+        }
+
+        const node = this._resolveNode(fileTree, dirPath);
+        if (!node || !node.children || node.children.length === 0) return;
+
+        const dropdown = this._buildDropdownMenu(node, tab);
 
         // Position below the anchor
         const rect = anchorEl.getBoundingClientRect();
