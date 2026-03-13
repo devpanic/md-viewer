@@ -128,74 +128,70 @@ async fn index_handler() -> HttpResponse {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
     <link rel="stylesheet" href="/static/css/main.css">
     <link rel="stylesheet" href="/static/vendor/katex.min.css">
 </head>
 <body>
-    <div class="app-container">
+    <div class="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div class="tabs">
-                    <button class="tab-button active" data-tab="files">파일</button>
-                    <button class="tab-button" data-tab="management">관리</button>
+                <div class="sidebar-brand">
+                    <div class="sidebar-brand-icon">M</div>
+                    <span class="sidebar-brand-text">Markdown Viewer <span class="sidebar-brand-version">v1.0</span></span>
                 </div>
             </div>
-            <div class="tab-content active" id="files-tab">
-                <div class="file-tree" id="file-tree">
-                    Loading...
-                </div>
+            <div class="sidebar-body" id="file-tree">
             </div>
-            <div class="tab-content" id="management-tab">
-                <div class="management-container">
-                    <div class="env-selector">
-                        <label>현재 환경:</label>
-                        <select id="env-select">
-                            <option value="">로딩중...</option>
-                        </select>
-                    </div>
-                    <div class="env-actions">
-                        <button id="add-env-btn" class="icon-btn icon-btn-add" title="환경 추가">+</button>
-                        <button id="edit-env-btn" class="icon-btn icon-btn-edit" title="환경 수정">✎</button>
-                        <button id="delete-env-btn" class="icon-btn icon-btn-delete" title="환경 삭제">×</button>
-                    </div>
-                    <div class="projects-section">
-                        <h3>프로젝트 목록</h3>
-                        <div id="projects-list">
-                            로딩중...
-                        </div>
-                        <button id="add-project-btn" class="icon-btn icon-btn-add icon-btn-full" title="프로젝트 추가">+ 프로젝트 추가</button>
-                    </div>
-                </div>
+            <div class="sidebar-footer">
+                <button class="sidebar-footer-btn" id="add-env-btn" title="환경 추가">
+                    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    환경 추가
+                </button>
+                <button class="sidebar-footer-icon" id="settings-btn" title="설정">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
             </div>
         </aside>
         <button class="sidebar-toggle" id="sidebar-toggle" title="사이드바 토글">
-            <span class="sidebar-toggle-icon" id="sidebar-toggle-icon">&lsaquo;</span>
+            <svg id="sidebar-toggle-icon" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <main class="content">
-            <div class="content-toolbar" id="content-toolbar">
-                <button class="split-toggle-btn" id="split-toggle-btn" title="화면 분할">&#x25EB;</button>
-            </div>
-            <div class="pane-container" id="pane-container">
-                <div class="pane active-pane" id="pane-1" data-pane-id="1">
-                    <div class="pane-tab-bar" id="pane-tab-bar-1"></div>
-                    <div class="pane-content" id="pane-content-1">
-                        <div class="markdown-viewer" id="markdown-viewer-1">
-                            <div class="welcome">
-                                <h1>Markdown Viewer</h1>
-                                <p>Select a markdown file from the sidebar to view it here.</p>
-                            </div>
+        <main class="main">
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <div class="breadcrumb" id="breadcrumb">
+                        <span class="breadcrumb-item">파일을 선택하세요</span>
+                    </div>
+                </div>
+                <div class="toolbar-actions">
+                    <button class="toolbar-btn" id="split-toggle-btn" title="화면 분할">
+                        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+                    </button>
+                    <div class="theme-picker">
+                        <button class="theme-picker-btn" id="theme-picker-btn" title="테마 색상">
+                            <div class="swatch-preview"></div>
+                        </button>
+                        <div class="theme-dropdown" id="theme-dropdown">
+                            <div class="theme-dropdown-title">Accent Color</div>
+                            <div class="theme-swatches" id="theme-swatches"></div>
                         </div>
                     </div>
                 </div>
+            </div>
+            <div class="pane-container" id="pane-container">
+                <div class="pane active-pane" id="pane-1" data-pane-id="1">
+                    <div class="pane-tabs" id="pane-tab-bar-1"></div>
+                    <div class="pane-content" id="pane-content-1">
+                        <div class="markdown-viewer" id="markdown-viewer-1"></div>
+                    </div>
+                </div>
                 <div class="pane" id="pane-2" data-pane-id="2" style="display: none;">
-                    <div class="pane-tab-bar" id="pane-tab-bar-2"></div>
+                    <div class="pane-tabs" id="pane-tab-bar-2"></div>
                     <div class="pane-content" id="pane-content-2">
-                        <div class="markdown-viewer" id="markdown-viewer-2">
-                            <div class="welcome">
-                                <h1>Markdown Viewer</h1>
-                                <p>Select a markdown file from the sidebar to view it here.</p>
-                            </div>
-                        </div>
+                        <div class="markdown-viewer" id="markdown-viewer-2"></div>
                     </div>
                 </div>
             </div>
@@ -206,16 +202,18 @@ async fn index_handler() -> HttpResponse {
     <div id="modal-overlay" class="modal-overlay">
         <div class="modal-dialog">
             <div class="modal-header">
-                <h3 id="modal-title"></h3>
-                <button class="modal-close" id="modal-close">&times;</button>
+                <span class="modal-title" id="modal-title"></span>
+                <button class="modal-close-btn" id="modal-close">
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
             <div class="modal-body">
-                <p id="modal-message"></p>
+                <p class="modal-message" id="modal-message"></p>
                 <input type="text" id="modal-input" class="modal-input" style="display: none;">
                 <input type="text" id="modal-input2" class="modal-input" style="display: none;">
             </div>
             <div class="modal-footer">
-                <button id="modal-cancel" class="btn btn-secondary">취소</button>
+                <button id="modal-cancel" class="btn btn-ghost">취소</button>
                 <button id="modal-confirm" class="btn btn-primary">확인</button>
             </div>
         </div>

@@ -38,10 +38,62 @@ class MarkdownViewer {
         const content = this.container.querySelector('.markdown-content');
         if (!content) return;
 
+        this.wrapCodeBlocks(content);
         this.highlightCode(content);
         this.renderMath(content);
         await this.renderMermaid(content);
         this.interceptLinks(content);
+    }
+
+    wrapCodeBlocks(content) {
+        content.querySelectorAll('pre').forEach((pre) => {
+            // Skip if already wrapped
+            if (pre.parentElement && pre.parentElement.classList.contains('code-block')) return;
+
+            const code = pre.querySelector('code');
+            if (!code) return;
+
+            // Detect language from class
+            let lang = '';
+            const classList = code.className || '';
+            const match = classList.match(/language-(\w+)/);
+            if (match) lang = match[1];
+
+            // Create wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-block';
+
+            // Create header
+            const header = document.createElement('div');
+            header.className = 'code-block-header';
+
+            const langLabel = document.createElement('span');
+            langLabel.className = 'code-block-lang';
+            langLabel.textContent = lang || 'code';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'code-block-copy';
+            copyBtn.textContent = 'Copy';
+            copyBtn.addEventListener('click', () => {
+                const text = code.textContent;
+                navigator.clipboard.writeText(text).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    copyBtn.classList.add('copied');
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                        copyBtn.classList.remove('copied');
+                    }, 2000);
+                }).catch(() => {});
+            });
+
+            header.appendChild(langLabel);
+            header.appendChild(copyBtn);
+
+            // Wrap
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(header);
+            wrapper.appendChild(pre);
+        });
     }
 
     highlightCode(content) {
@@ -84,7 +136,6 @@ class MarkdownViewer {
         try {
             const mermaidBlocks = content.querySelectorAll('.mermaid');
             if (mermaidBlocks.length > 0) {
-                // Mermaid 10.x uses the run() API instead of init()
                 await mermaid.run({
                     nodes: mermaidBlocks,
                 });
@@ -100,26 +151,20 @@ class MarkdownViewer {
         links.forEach(link => {
             const href = link.getAttribute('href');
 
-            // Check if it's a markdown file link
             if (href && (href.endsWith('.md') || href.includes('.md#'))) {
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
 
-                    // Extract anchor if present
                     const [filePath, anchor] = href.split('#');
-
-                    // Resolve relative path based on current file path
                     const targetPath = this.resolveRelativePath(this.currentPath, filePath);
 
                     console.log('Link clicked:', href, '-> resolved to:', targetPath);
 
-                    // Load the target file via callback or fallback
                     const loadPromise = this.onLinkClick
                         ? this.onLinkClick(this.currentEnvId, this.currentProjectId, targetPath)
                         : this.loadFile(this.currentEnvId, this.currentProjectId, targetPath);
 
                     loadPromise.then(() => {
-                        // Scroll to anchor if present
                         if (anchor) {
                             setTimeout(() => {
                                 const element = document.getElementById(anchor);
@@ -135,35 +180,27 @@ class MarkdownViewer {
     }
 
     resolveRelativePath(currentPath, relativePath) {
-        // Handle absolute paths (starting with /)
         if (relativePath.startsWith('/')) {
             return relativePath;
         }
 
-        // Get directory of current file
         const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
 
-        // Handle ./ prefix
         if (relativePath.startsWith('./')) {
             relativePath = relativePath.substring(2);
         }
 
-        // Start from current directory, filter out empty strings
         let parts = currentDir ? currentDir.split('/').filter(p => p !== '') : [];
 
-        // Process each part of relative path
         const relParts = relativePath.split('/');
         for (const part of relParts) {
             if (part === '..') {
-                // Go up one directory
                 parts.pop();
             } else if (part !== '.' && part !== '') {
-                // Add to path
                 parts.push(part);
             }
         }
 
-        // Join and return with leading slash
         return '/' + parts.join('/');
     }
 

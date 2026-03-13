@@ -1,13 +1,33 @@
-// Version: 2026-01-28-hierarchical
+// Version: 2026-03-13-redesign
 class FileBrowser {
     constructor(container) {
         this.container = container;
         this.currentFile = null;
         this.listeners = {};
-        this.collapsedNodes = new Set(); // Track collapsed state by path
-        this.projectFileCache = new Map(); // Cache loaded project files
-        this.config = null; // Store project tree config
-        console.log('FileBrowser initialized - hierarchical version');
+        this.collapsedNodes = new Set();
+        this.projectFileCache = new Map();
+        this.config = null;
+        console.log('FileBrowser initialized - redesign version');
+    }
+
+    // SVG icon helpers
+    svgChevron() {
+        return '<svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
+    }
+    svgServer() {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>';
+    }
+    svgFolder() {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+    }
+    svgFolderOpen() {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2 3h9a2 2 0 0 1 2 2v1M5 19h14a2 2 0 0 0 2-2l1-7H7.5"/></svg>';
+    }
+    svgFile() {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+    }
+    svgProject() {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
     }
 
     async loadProjectTree() {
@@ -27,19 +47,15 @@ class FileBrowser {
     initializeCollapsedState() {
         if (!this.config) return;
 
-        // Collapse all non-current environments
         this.config.environments.forEach(env => {
             if (env.id !== this.config.curr_env) {
                 this.collapsedNodes.add(`env:${env.id}`);
             }
 
-            // Collapse all projects (including current one by default)
             env.projects.forEach(project => {
                 this.collapsedNodes.add(`project:${env.id}:${project.id}`);
             });
         });
-
-        console.log('Initialized collapsed state:', Array.from(this.collapsedNodes));
     }
 
     async render() {
@@ -54,7 +70,7 @@ class FileBrowser {
 
     async renderEnvironment(env) {
         const envDiv = document.createElement('div');
-        envDiv.className = 'tree-node env-node';
+        envDiv.className = 'tree-env';
 
         const isCurrentEnv = env.id === this.config.curr_env;
         const envKey = `env:${env.id}`;
@@ -62,84 +78,96 @@ class FileBrowser {
 
         // Environment header
         const headerDiv = document.createElement('div');
-        headerDiv.className = 'tree-item environment';
-        if (isCurrentEnv) headerDiv.classList.add('current-env');
-        headerDiv.style.paddingLeft = '8px';
+        headerDiv.className = 'tree-env-header';
+        if (isCurrentEnv) headerDiv.classList.add('current');
+
+        const chevron = document.createElement('span');
+        chevron.className = 'tree-chevron' + (isCollapsed ? '' : ' open');
+        chevron.innerHTML = this.svgChevron();
 
         const icon = document.createElement('span');
-        icon.className = 'tree-item-icon';
-        icon.textContent = isCollapsed ? '▸' : '▾';
+        icon.className = 'tree-icon';
+        icon.innerHTML = this.svgServer();
 
-        const name = document.createElement('span');
-        name.className = 'tree-item-name';
-        name.textContent = env.name;
-        if (isCurrentEnv) name.textContent += ' (현재)';
+        const label = document.createElement('span');
+        label.className = 'tree-label';
+        label.textContent = env.name;
 
+        headerDiv.appendChild(chevron);
         headerDiv.appendChild(icon);
-        headerDiv.appendChild(name);
+        headerDiv.appendChild(label);
+
+        if (isCurrentEnv) {
+            const badge = document.createElement('span');
+            badge.className = 'tree-badge';
+            badge.textContent = '현재';
+            headerDiv.appendChild(badge);
+        }
 
         headerDiv.addEventListener('click', async (e) => {
             e.stopPropagation();
-
             if (this.collapsedNodes.has(envKey)) {
                 this.collapsedNodes.delete(envKey);
             } else {
                 this.collapsedNodes.add(envKey);
             }
-
             await this.render();
+        });
+
+        headerDiv.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.emit('env-context-menu', {
+                x: e.clientX,
+                y: e.clientY,
+                type: 'environment',
+                envId: env.id,
+                envName: env.name
+            });
         });
 
         envDiv.appendChild(headerDiv);
 
         // Projects container
         if (!isCollapsed) {
-            const projectsDiv = document.createElement('div');
-            projectsDiv.className = 'tree-children';
-
             for (const project of env.projects) {
-                await this.renderProject(projectsDiv, env, project);
+                await this.renderProject(envDiv, env, project);
             }
-
-            envDiv.appendChild(projectsDiv);
         }
 
         this.container.appendChild(envDiv);
     }
 
     async renderProject(parent, env, project) {
-        const projectDiv = document.createElement('div');
-        projectDiv.className = 'tree-node project-node';
-
         const isCurrentProject = env.id === this.config.curr_env && project.id === env.curr_prj;
         const projectKey = `project:${env.id}:${project.id}`;
         const isCollapsed = this.collapsedNodes.has(projectKey);
 
         // Project header
         const headerDiv = document.createElement('div');
-        headerDiv.className = 'tree-item project';
-        if (isCurrentProject) headerDiv.classList.add('current-project');
-        headerDiv.style.paddingLeft = '16px';
+        headerDiv.className = 'tree-project-header';
+
+        const chevron = document.createElement('span');
+        chevron.className = 'tree-chevron' + (isCollapsed ? '' : ' open');
+        chevron.innerHTML = this.svgChevron();
 
         const icon = document.createElement('span');
-        icon.className = 'tree-item-icon';
-        icon.textContent = isCollapsed ? '▸' : '▾';
+        icon.className = 'tree-icon';
+        icon.innerHTML = this.svgProject();
 
-        const name = document.createElement('span');
-        name.className = 'tree-item-name';
-        name.textContent = project.name;
+        const label = document.createElement('span');
+        label.className = 'tree-label';
+        label.textContent = project.name;
 
+        headerDiv.appendChild(chevron);
         headerDiv.appendChild(icon);
-        headerDiv.appendChild(name);
+        headerDiv.appendChild(label);
 
         headerDiv.addEventListener('click', async (e) => {
             e.stopPropagation();
 
-            // Toggle collapse
             if (this.collapsedNodes.has(projectKey)) {
                 this.collapsedNodes.delete(projectKey);
-
-                // Load files if not cached
                 if (!this.projectFileCache.has(projectKey)) {
                     await this.loadProjectFiles(env.id, project.id);
                 }
@@ -147,121 +175,128 @@ class FileBrowser {
                 this.collapsedNodes.add(projectKey);
             }
 
-            // Update current project locally (no server call)
             if (!isCurrentProject) {
                 const currentEnv = this.config.environments.find(e => e.id === this.config.curr_env);
                 if (currentEnv) {
                     currentEnv.curr_prj = project.id;
                 }
-
-                // Emit event for other components
                 this.emit('project-changed', { envId: env.id, projectId: project.id });
             }
 
             await this.render();
         });
 
-        projectDiv.appendChild(headerDiv);
+        headerDiv.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.emit('project-context-menu', {
+                x: e.clientX,
+                y: e.clientY,
+                type: 'project',
+                envId: env.id,
+                projectId: project.id,
+                projectName: project.name,
+                projectPath: project.path
+            });
+        });
+
+        parent.appendChild(headerDiv);
 
         // Files container (lazy loaded)
         if (!isCollapsed) {
             const filesDiv = document.createElement('div');
-            filesDiv.className = 'tree-children';
+            filesDiv.className = 'tree-files';
 
             const fileTree = this.projectFileCache.get(projectKey);
 
             if (!fileTree) {
-                // Show loading indicator
                 const loadingDiv = document.createElement('div');
-                loadingDiv.className = 'tree-item loading';
-                loadingDiv.style.paddingLeft = '24px';
-                loadingDiv.textContent = '로딩 중...';
+                loadingDiv.className = 'tree-file';
+                loadingDiv.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">로딩 중...</span>';
                 filesDiv.appendChild(loadingDiv);
 
-                // Load in background
                 this.loadProjectFiles(env.id, project.id).then(() => {
                     this.render();
                 });
             } else {
-                // Render file tree (skip root node, render children directly)
                 if (fileTree.children && fileTree.children.length > 0) {
                     fileTree.children.forEach(child => {
-                        this.renderFileNode(filesDiv, child, 3, `${projectKey}:`, env.id, project.id);
+                        this.renderFileNode(filesDiv, child, `${projectKey}:`, env.id, project.id);
                     });
                 } else {
                     const emptyDiv = document.createElement('div');
-                    emptyDiv.className = 'tree-item empty';
-                    emptyDiv.style.paddingLeft = '24px';
-                    emptyDiv.textContent = '파일이 없습니다';
+                    emptyDiv.className = 'tree-file';
+                    emptyDiv.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">파일이 없습니다</span>';
                     filesDiv.appendChild(emptyDiv);
                 }
             }
 
-            projectDiv.appendChild(filesDiv);
+            parent.appendChild(filesDiv);
         }
-
-        parent.appendChild(projectDiv);
     }
 
-    renderFileNode(parent, node, level, pathPrefix, envId, projectId) {
+    renderFileNode(parent, node, pathPrefix, envId, projectId) {
         if (node.is_dir) {
-            // Directory
-            const dirDiv = document.createElement('div');
-            dirDiv.className = 'tree-node';
-
             const nodeKey = `${pathPrefix}${node.path}`;
             const isCollapsed = this.collapsedNodes.has(nodeKey);
 
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'tree-item directory';
-            itemDiv.style.paddingLeft = (level * 8) + 'px';
+            // Directory header
+            const dirHeader = document.createElement('div');
+            dirHeader.className = 'tree-dir-header';
+
+            const chevron = document.createElement('span');
+            chevron.className = 'tree-chevron' + (isCollapsed ? '' : ' open');
+            chevron.innerHTML = this.svgChevron();
 
             const icon = document.createElement('span');
-            icon.className = 'tree-item-icon';
-            icon.textContent = isCollapsed ? '▸' : '▾';
+            icon.className = 'tree-icon icon-folder' + (isCollapsed ? '' : '-open');
+            icon.innerHTML = isCollapsed ? this.svgFolder() : this.svgFolderOpen();
 
-            const name = document.createElement('span');
-            name.className = 'tree-item-name';
-            name.textContent = node.name;
+            const label = document.createElement('span');
+            label.className = 'tree-label';
+            label.textContent = node.name;
 
-            itemDiv.appendChild(icon);
-            itemDiv.appendChild(name);
-
-            itemDiv.addEventListener('click', (e) => {
-                e.stopPropagation();
-
-                if (this.collapsedNodes.has(nodeKey)) {
-                    this.collapsedNodes.delete(nodeKey);
-                    icon.textContent = '▾';
-                    childrenDiv.classList.remove('collapsed');
-                } else {
-                    this.collapsedNodes.add(nodeKey);
-                    icon.textContent = '▸';
-                    childrenDiv.classList.add('collapsed');
-                }
-            });
-
-            dirDiv.appendChild(itemDiv);
+            dirHeader.appendChild(chevron);
+            dirHeader.appendChild(icon);
+            dirHeader.appendChild(label);
 
             const childrenDiv = document.createElement('div');
-            childrenDiv.className = 'tree-children';
+            childrenDiv.className = 'tree-dir-children';
             if (isCollapsed) {
                 childrenDiv.classList.add('collapsed');
             }
 
+            dirHeader.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                if (this.collapsedNodes.has(nodeKey)) {
+                    this.collapsedNodes.delete(nodeKey);
+                    chevron.classList.add('open');
+                    icon.className = 'tree-icon icon-folder-open';
+                    icon.innerHTML = this.svgFolderOpen();
+                    childrenDiv.classList.remove('collapsed');
+                } else {
+                    this.collapsedNodes.add(nodeKey);
+                    chevron.classList.remove('open');
+                    icon.className = 'tree-icon icon-folder';
+                    icon.innerHTML = this.svgFolder();
+                    childrenDiv.classList.add('collapsed');
+                }
+            });
+
+            parent.appendChild(dirHeader);
+
             if (node.children) {
                 node.children.forEach(child => {
-                    this.renderFileNode(childrenDiv, child, level + 1, pathPrefix, envId, projectId);
+                    this.renderFileNode(childrenDiv, child, pathPrefix, envId, projectId);
                 });
             }
 
-            dirDiv.appendChild(childrenDiv);
-            parent.appendChild(dirDiv);
+            parent.appendChild(childrenDiv);
         } else {
             // File
             const fileDiv = document.createElement('div');
-            fileDiv.className = 'tree-item file';
-            fileDiv.style.paddingLeft = (level * 8) + 'px';
+            fileDiv.className = 'tree-file';
             fileDiv.dataset.path = node.path;
             fileDiv.dataset.envId = envId;
             fileDiv.dataset.projectId = projectId;
@@ -272,15 +307,15 @@ class FileBrowser {
             }
 
             const icon = document.createElement('span');
-            icon.className = 'tree-item-icon';
-            icon.textContent = '📄';
+            icon.className = 'tree-icon icon-md';
+            icon.innerHTML = this.svgFile();
 
-            const name = document.createElement('span');
-            name.className = 'tree-item-name';
-            name.textContent = node.name;
+            const label = document.createElement('span');
+            label.className = 'tree-label';
+            label.textContent = node.name;
 
             fileDiv.appendChild(icon);
-            fileDiv.appendChild(name);
+            fileDiv.appendChild(label);
 
             fileDiv.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -311,10 +346,7 @@ class FileBrowser {
 
             const fileTree = await response.json();
             this.projectFileCache.set(projectKey, fileTree);
-
-            // Initialize collapsed state for all folders in this project
             this.initializeFileTreeCollapsedState(fileTree, projectKey);
-
             console.log('Loaded files for project:', projectKey);
         } catch (e) {
             console.error('Error loading project files:', e);
@@ -325,7 +357,6 @@ class FileBrowser {
         if (node.children) {
             node.children.forEach(child => {
                 if (child.is_dir) {
-                    // Collapse all folders by default
                     this.collapsedNodes.add(`${pathPrefix}:${child.path}`);
                     this.initializeFileTreeCollapsedState(child, pathPrefix);
                 }
@@ -333,27 +364,20 @@ class FileBrowser {
         }
     }
 
-
     async refreshProject(envId, projectId) {
         const projectKey = `project:${envId}:${projectId}`;
-
-        // Clear cache for this project
         this.projectFileCache.delete(projectKey);
 
-        // If this project is currently expanded, reload its files
         if (!this.collapsedNodes.has(projectKey)) {
             await this.loadProjectFiles(envId, projectId);
         }
 
-        // Re-render without resetting collapse state
         await this.render();
     }
 
     async refreshAllFiles() {
-        // Clear all file caches
         this.projectFileCache.clear();
 
-        // Reload files for all expanded projects
         if (this.config) {
             for (const env of this.config.environments) {
                 for (const project of env.projects) {
@@ -372,11 +396,11 @@ class FileBrowser {
         const fileKey = `${envId}:${projectId}:${path}`;
         this.currentFile = fileKey;
 
-        this.container.querySelectorAll('.tree-item.active').forEach(el => {
+        this.container.querySelectorAll('.tree-file.active').forEach(el => {
             el.classList.remove('active');
         });
 
-        this.container.querySelectorAll('.tree-item.file').forEach(el => {
+        this.container.querySelectorAll('.tree-file').forEach(el => {
             if (el.dataset.envId === envId && el.dataset.projectId === projectId && el.dataset.path === path) {
                 el.classList.add('active');
             }

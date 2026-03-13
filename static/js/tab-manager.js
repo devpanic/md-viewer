@@ -11,6 +11,7 @@ class TabManager {
     init() {
         this.paneContainer = document.getElementById('pane-container');
         this.splitToggleBtn = document.getElementById('split-toggle-btn');
+        this.breadcrumbEl = document.getElementById('breadcrumb');
 
         ['1', '2'].forEach(id => {
             const paneEl = document.getElementById('pane-' + id);
@@ -43,6 +44,10 @@ class TabManager {
         this.splitToggleBtn.addEventListener('click', () => {
             this.toggleSplitView();
         });
+
+        // Show welcome screen on init
+        this.showWelcome('1');
+        this.showWelcome('2');
     }
 
     getPaneIdForViewer(viewer) {
@@ -70,7 +75,6 @@ class TabManager {
         return null;
     }
 
-    // Left-click: open in active pane (or switch to existing)
     openTab(envId, projectId, path) {
         const existing = this.findTabByPath(envId, projectId, path);
         if (existing) {
@@ -81,7 +85,6 @@ class TabManager {
         return this.openTabInPane(envId, projectId, path, this.activePaneId);
     }
 
-    // Context-menu or link-click: open in specific pane
     async openTabInPane(envId, projectId, path, paneId) {
         const existing = this.findTabByPath(envId, projectId, path);
         if (existing) {
@@ -108,6 +111,7 @@ class TabManager {
 
         this.setActivePane(paneId);
         this.renderTabBar(paneId);
+        this.updateBreadcrumb(tab);
 
         await pane.viewer.loadFile(envId, projectId, path);
     }
@@ -131,6 +135,7 @@ class TabManager {
                 pane.activeTabId = newTabId;
                 const newTab = this.tabs.get(newTabId);
                 if (newTab) {
+                    this.updateBreadcrumb(newTab);
                     pane.viewer.loadFile(newTab.envId, newTab.projectId, newTab.path).then(() => {
                         pane.contentEl.scrollTop = newTab.scrollPosition;
                     });
@@ -138,6 +143,7 @@ class TabManager {
             } else {
                 pane.activeTabId = null;
                 this.showWelcome(paneId);
+                this.clearBreadcrumb();
             }
         }
 
@@ -153,6 +159,7 @@ class TabManager {
 
         pane.activeTabId = tabId;
         this.renderTabBar(tab.paneId);
+        this.updateBreadcrumb(tab);
 
         pane.viewer.loadFile(tab.envId, tab.projectId, tab.path).then(() => {
             pane.contentEl.scrollTop = tab.scrollPosition;
@@ -203,6 +210,12 @@ class TabManager {
         for (const [id, pane] of Object.entries(this.panes)) {
             pane.el.classList.toggle('active-pane', id === paneId);
         }
+        // Update breadcrumb for active pane's active tab
+        const pane = this.panes[paneId];
+        if (pane && pane.activeTabId) {
+            const tab = this.tabs.get(pane.activeTabId);
+            if (tab) this.updateBreadcrumb(tab);
+        }
     }
 
     toggleSplitView() {
@@ -219,7 +232,6 @@ class TabManager {
         const pane2 = this.panes['2'];
         const pane1 = this.panes['1'];
 
-        // Move all pane-2 tabs to pane-1
         [...pane2.tabOrder].forEach(tabId => {
             const tab = this.tabs.get(tabId);
             if (tab) {
@@ -228,7 +240,6 @@ class TabManager {
             }
         });
 
-        // If pane-1 had no active tab, take pane-2's
         if (!pane1.activeTabId && pane2.activeTabId) {
             pane1.activeTabId = pane2.activeTabId;
             const tab = this.tabs.get(pane1.activeTabId);
@@ -251,10 +262,46 @@ class TabManager {
     showWelcome(paneId) {
         const pane = this.panes[paneId];
         pane.viewer.container.innerHTML =
-            '<div class="welcome">' +
-                '<h1>Markdown Viewer</h1>' +
-                '<p>Select a markdown file from the sidebar to view it here.</p>' +
+            '<div class="welcome-screen">' +
+                '<div class="welcome-bg"></div>' +
+                '<div class="welcome-content">' +
+                    '<div class="welcome-icon">' +
+                        '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' +
+                    '</div>' +
+                    '<div class="welcome-title">Markdown Viewer</div>' +
+                    '<div class="welcome-subtitle">사이드바에서 마크다운 파일을 선택하세요</div>' +
+                '</div>' +
             '</div>';
+    }
+
+    updateBreadcrumb(tab) {
+        if (!this.breadcrumbEl) return;
+        const parts = tab.path.split('/').filter(p => p);
+        const fileName = parts.pop() || tab.path;
+
+        let html = '';
+        if (tab.projectId) {
+            html += '<span class="breadcrumb-item">' + this.escapeHtml(tab.projectId) + '</span>';
+            html += '<span class="breadcrumb-sep">/</span>';
+        }
+        parts.forEach(part => {
+            html += '<span class="breadcrumb-item">' + this.escapeHtml(part) + '</span>';
+            html += '<span class="breadcrumb-sep">/</span>';
+        });
+        html += '<span class="breadcrumb-item current">' + this.escapeHtml(fileName) + '</span>';
+
+        this.breadcrumbEl.innerHTML = html;
+    }
+
+    clearBreadcrumb() {
+        if (!this.breadcrumbEl) return;
+        this.breadcrumbEl.innerHTML = '<span class="breadcrumb-item">파일을 선택하세요</span>';
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     renderTabBar(paneId) {
@@ -266,45 +313,57 @@ class TabManager {
             if (!tab) return;
 
             const tabEl = document.createElement('div');
-            tabEl.className = 'viewer-tab';
+            tabEl.className = 'pane-tab';
             tabEl.draggable = true;
             tabEl.dataset.tabId = tabId;
             if (tabId === pane.activeTabId) tabEl.classList.add('active');
 
+            // File icon
+            const iconEl = document.createElement('span');
+            iconEl.className = 'pane-tab-icon';
+            iconEl.innerHTML = '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+            tabEl.appendChild(iconEl);
+
+            // Label
             const labelEl = document.createElement('span');
-            labelEl.className = 'viewer-tab-label';
             labelEl.textContent = tab.label;
             tabEl.appendChild(labelEl);
+
+            // Action buttons container
+            const actionsEl = document.createElement('span');
+            actionsEl.className = 'pane-tab-actions';
 
             // Refresh button (active tab only)
             if (tabId === pane.activeTabId) {
                 const refreshEl = document.createElement('button');
-                refreshEl.className = 'viewer-tab-refresh';
-                refreshEl.innerHTML = '&#x21bb;';
+                refreshEl.className = 'tab-action-btn refresh-btn';
                 refreshEl.title = '새로고침';
+                refreshEl.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
                 refreshEl.addEventListener('click', (e) => {
                     e.stopPropagation();
                     e.preventDefault();
                     this.refreshTab(tabId, paneId);
                 });
-                tabEl.appendChild(refreshEl);
+                actionsEl.appendChild(refreshEl);
             }
 
+            // Close button
             const closeEl = document.createElement('button');
-            closeEl.className = 'viewer-tab-close';
-            closeEl.innerHTML = '&times;';
+            closeEl.className = 'tab-action-btn';
             closeEl.title = '닫기';
+            closeEl.innerHTML = '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
             closeEl.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
                 this.closeTab(tabId);
             });
-            tabEl.appendChild(closeEl);
+            actionsEl.appendChild(closeEl);
+
+            tabEl.appendChild(actionsEl);
 
             // Left click to switch
             tabEl.addEventListener('click', (e) => {
-                if (e.target.closest('.viewer-tab-close')) return;
-                if (e.target.closest('.viewer-tab-refresh')) return;
+                if (e.target.closest('.tab-action-btn')) return;
                 e.stopPropagation();
                 this.setActivePane(paneId);
                 this.switchTab(tabId);

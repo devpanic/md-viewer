@@ -7,8 +7,17 @@ class ContextMenu {
         this.bindGlobalEvents();
     }
 
-    addItem({ id, label, icon, group, order, visible, handler }) {
-        this.items.push({ id, label, icon: icon || '', group: group || 'default', order: order || 0, visible, handler });
+    addItem({ id, label, icon, group, order, visible, handler, danger }) {
+        this.items.push({
+            id,
+            label,
+            icon: icon || '',
+            group: group || 'default',
+            order: order || 0,
+            visible,
+            handler,
+            danger: danger || false
+        });
         this.items.sort((a, b) => {
             if (a.group !== b.group) return a.group.localeCompare(b.group);
             return a.order - b.order;
@@ -30,18 +39,19 @@ class ContextMenu {
         visibleItems.forEach(item => {
             if (lastGroup !== null && item.group !== lastGroup) {
                 const sep = document.createElement('div');
-                sep.className = 'context-menu-separator';
+                sep.className = 'ctx-separator';
                 this.menuEl.appendChild(sep);
             }
             lastGroup = item.group;
 
             const itemEl = document.createElement('div');
-            itemEl.className = 'context-menu-item';
+            itemEl.className = 'ctx-item';
+            if (item.danger) itemEl.classList.add('danger');
 
             if (item.icon) {
                 const iconEl = document.createElement('span');
-                iconEl.className = 'context-menu-item-icon';
-                iconEl.textContent = item.icon;
+                iconEl.className = 'ctx-icon';
+                iconEl.innerHTML = item.icon;
                 itemEl.appendChild(iconEl);
             }
 
