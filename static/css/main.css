@@ -246,6 +246,107 @@ body {
 }
 
 /* ========================================
+   FAVORITES SECTION
+   ======================================== */
+.tree-favorites {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.tree-favorites-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s var(--ease-out);
+    user-select: none;
+}
+
+.tree-favorites-header:hover {
+    background: var(--surface-hover);
+}
+
+.tree-favorites-header .tree-icon.tree-fav-icon {
+    color: var(--accent);
+}
+
+.tree-favorites-header .tree-icon.tree-fav-icon svg {
+    fill: var(--accent);
+    stroke: var(--accent);
+}
+
+.tree-favorites-header .tree-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.tree-fav-count {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--surface-3);
+    padding: 1px 6px;
+    border-radius: 8px;
+    min-width: 16px;
+    text-align: center;
+}
+
+.tree-favorites-list {
+    padding-left: 8px;
+}
+
+.tree-favorite-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px 5px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.12s var(--ease-out);
+}
+
+.tree-favorite-item:hover {
+    background: var(--surface-hover);
+}
+
+.tree-fav-project {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: auto;
+    flex-shrink: 0;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Favorite indicator in file tree */
+.tree-file .fav-indicator {
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.45;
+}
+
+.tree-file .fav-indicator svg {
+    width: 10px;
+    height: 10px;
+    fill: var(--accent);
+    stroke: var(--accent);
+    stroke-width: 1.5;
+}
+
+/* ========================================
    TREE NODES
    ======================================== */
 .tree-section {

@@ -370,3 +370,51 @@ pub async fn delete_project(
     }
 }
 
+// Favorite API endpoints
+
+#[derive(serde::Deserialize)]
+pub struct FavoriteRequest {
+    env_id: String,
+    project_id: String,
+    path: String,
+}
+
+pub async fn get_favorites(data: web::Data<Arc<AppState>>) -> Result<HttpResponse> {
+    let favorites = data.project_manager.get_favorites();
+    Ok(HttpResponse::Ok().json(favorites))
+}
+
+pub async fn add_favorite(
+    req: web::Json<FavoriteRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.add_favorite(
+        req.env_id.clone(),
+        req.project_id.clone(),
+        req.path.clone(),
+    ) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Favorite added successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+
+pub async fn remove_favorite(
+    req: web::Json<FavoriteRequest>,
+    data: web::Data<Arc<AppState>>,
+) -> Result<HttpResponse> {
+    match data.project_manager.remove_favorite(&req.env_id, &req.project_id, &req.path) {
+        Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Favorite removed successfully"
+        }))),
+        Err(e) => Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": e.to_string()
+        }))),
+    }
+}
+

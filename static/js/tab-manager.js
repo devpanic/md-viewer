@@ -320,13 +320,17 @@ class TabManager {
         return el;
     }
 
-    showBreadcrumbDropdown(dirPath, tab, anchorEl) {
+    async showBreadcrumbDropdown(dirPath, tab, anchorEl) {
         this.closeBreadcrumbDropdown();
 
         if (typeof fileBrowser === 'undefined') return;
         const projectKey = `project:${tab.envId}:${tab.projectId}`;
-        const fileTree = fileBrowser.projectFileCache.get(projectKey);
-        if (!fileTree) return;
+        let fileTree = fileBrowser.projectFileCache.get(projectKey);
+        if (!fileTree) {
+            await fileBrowser.loadProjectFiles(tab.envId, tab.projectId);
+            fileTree = fileBrowser.projectFileCache.get(projectKey);
+            if (!fileTree) return;
+        }
 
         // Navigate to the target directory node
         let node = fileTree;

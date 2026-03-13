@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::SystemTime;
 
 const CONFIG_FILE: &str = "prj_config.json";
 
@@ -22,9 +23,20 @@ pub struct Environment {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Favorite {
+    pub env_id: String,
+    pub project_id: String,
+    pub path: String,
+    pub name: String,
+    pub added_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectConfig {
     pub curr_env: String,
     pub environments: Vec<Environment>,
+    #[serde(default)]
+    pub favorites: Vec<Favorite>,
 }
 
 impl Default for ProjectConfig {
@@ -37,6 +49,7 @@ impl Default for ProjectConfig {
                 curr_prj: None,
                 projects: vec![],
             }],
+            favorites: vec![],
         }
     }
 }
@@ -141,6 +154,7 @@ impl ProjectManager {
         }
 
         config.environments.retain(|e| e.id != id);
+        config.favorites.retain(|f| f.env_id != id);
 
         drop(config);
         self.save_config()
@@ -191,9 +205,60 @@ impl ProjectManager {
             .context("Environment not found")?;
 
         env.projects.retain(|p| p.id != project_id);
+        config.favorites.retain(|f| !(f.env_id == env_id && f.project_id == project_id));
 
         drop(config);
         self.save_config()
     }
 
+    // Favorite operations
+    pub fn get_favorites(&self) -> Vec<Favorite> {
+        self.config.read().unwrap().favorites.clone()
+    }
+
+    pub fn add_favorite(&self, env_id: String, project_id: String, path: String) -> Result<()> {
+        let mut config = self.config.write().unwrap();
+
+        // Duplicate check
+        let already_exists = config.favorites.iter().any(|f|
+            f.env_id == env_id && f.project_id == project_id && f.path == path
+        );
+        if already_exists {
+            anyhow::bail!("Already in favorites");
+        }
+
+        // Validate environment and project exist
+        let env = config.environments.iter()
+            .find(|e| e.id == env_id)
+            .context("Environment not found")?;
+        let _project = env.projects.iter()
+            .find(|p| p.id == project_id)
+            .context("Project not found")?;
+
+        let name = path.split('/').last().unwrap_or(&path).to_string();
+        let added_at = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        config.favorites.push(Favorite {
+            env_id, project_id, path, name, added_at
+        });
+
+        drop(config);
+        self.save_config()
+    }
+
+    pub fn remove_favorite(&self, env_id: &str, project_id: &str, path: &str) -> Result<()> {
+        let mut config = self.config.write().unwrap();
+        let before_len = config.favorites.len();
+        config.favorites.retain(|f|
+            !(f.env_id == env_id && f.project_id == project_id && f.path == path)
+        );
+        if config.favorites.len() == before_len {
+            anyhow::bail!("Favorite not found");
+        }
+        drop(config);
+        self.save_config()
+    }
 }

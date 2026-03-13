@@ -148,6 +148,51 @@ function initialize() {
         }
     });
 
+    // Favorite: add/remove from file context menu
+    contextMenu.addItem({
+        id: 'add-favorite',
+        label: '즐겨찾기 추가',
+        icon: '<svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+        group: 'favorite',
+        order: 1,
+        visible: (ctx) => ctx.type === 'file' && !fileBrowser.isFavorite(ctx.envId, ctx.projectId, ctx.path),
+        handler: async (ctx) => {
+            try {
+                const res = await fetch('/api/favorites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ env_id: ctx.envId, project_id: ctx.projectId, path: ctx.path })
+                });
+                if (!res.ok) throw new Error('Failed');
+                await fileBrowser.loadProjectTree();
+            } catch (e) {
+                console.error('Failed to add favorite:', e);
+            }
+        }
+    });
+
+    contextMenu.addItem({
+        id: 'remove-favorite-from-file',
+        label: '즐겨찾기 해제',
+        icon: '<svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/><line x1="4" y1="4" x2="20" y2="20"/></svg>',
+        group: 'favorite',
+        order: 1,
+        visible: (ctx) => ctx.type === 'file' && fileBrowser.isFavorite(ctx.envId, ctx.projectId, ctx.path),
+        handler: async (ctx) => {
+            try {
+                const res = await fetch('/api/favorites', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ env_id: ctx.envId, project_id: ctx.projectId, path: ctx.path })
+                });
+                if (!res.ok) throw new Error('Failed');
+                await fileBrowser.loadProjectTree();
+            } catch (e) {
+                console.error('Failed to remove favorite:', e);
+            }
+        }
+    });
+
     // Environment context menu items
     contextMenu.addItem({
         id: 'env-add-project',
@@ -226,6 +271,55 @@ function initialize() {
         }
     });
 
+    // Favorite context menu items (for items in the favorites section)
+    contextMenu.addItem({
+        id: 'fav-open-in-pane-1',
+        label: '좌측 탭에서 열기',
+        icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
+        group: 'fav-open',
+        order: 1,
+        visible: (ctx) => ctx.type === 'favorite',
+        handler: (ctx) => tabManager.openTabInPane(ctx.envId, ctx.projectId, ctx.path, '1')
+    });
+
+    contextMenu.addItem({
+        id: 'fav-open-in-pane-2',
+        label: '우측 탭에서 열기',
+        icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>',
+        group: 'fav-open',
+        order: 2,
+        visible: (ctx) => ctx.type === 'favorite',
+        handler: (ctx) => {
+            if (!tabManager.isSplit) {
+                tabManager.toggleSplitView();
+            }
+            tabManager.openTabInPane(ctx.envId, ctx.projectId, ctx.path, '2');
+        }
+    });
+
+    contextMenu.addItem({
+        id: 'fav-remove',
+        label: '즐겨찾기 제거',
+        icon: '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+        group: 'fav-danger',
+        order: 1,
+        visible: (ctx) => ctx.type === 'favorite',
+        danger: true,
+        handler: async (ctx) => {
+            try {
+                const res = await fetch('/api/favorites', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ env_id: ctx.envId, project_id: ctx.projectId, path: ctx.path })
+                });
+                if (!res.ok) throw new Error('Failed');
+                await fileBrowser.loadProjectTree();
+            } catch (e) {
+                console.error('Failed to remove favorite:', e);
+            }
+        }
+    });
+
     fileBrowser.loadProjectTree();
 
     fileBrowser.on('file-selected', (data) => {
@@ -242,6 +336,10 @@ function initialize() {
     });
 
     fileBrowser.on('project-context-menu', (data) => {
+        contextMenu.show(data.x, data.y, data);
+    });
+
+    fileBrowser.on('favorite-context-menu', (data) => {
         contextMenu.show(data.x, data.y, data);
     });
 

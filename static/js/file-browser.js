@@ -29,6 +29,12 @@ class FileBrowser {
     svgProject() {
         return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>';
     }
+    svgStar() {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+    }
+    svgStarFilled() {
+        return '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+    }
 
     async loadProjectTree() {
         try {
@@ -58,14 +64,135 @@ class FileBrowser {
         });
     }
 
+    isFavorite(envId, projectId, path) {
+        if (!this.config || !this.config.favorites) return false;
+        return this.config.favorites.some(f =>
+            f.env_id === envId && f.project_id === projectId && f.path === path
+        );
+    }
+
     async render() {
         if (!this.config) return;
 
         this.container.innerHTML = '';
 
+        this.renderFavorites();
+
         for (const env of this.config.environments) {
             await this.renderEnvironment(env);
         }
+    }
+
+    renderFavorites() {
+        const favorites = this.config.favorites || [];
+        if (favorites.length === 0) return;
+
+        const section = document.createElement('div');
+        section.className = 'tree-favorites';
+
+        const favKey = 'favorites';
+        const isCollapsed = this.collapsedNodes.has(favKey);
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'tree-favorites-header';
+
+        const chevron = document.createElement('span');
+        chevron.className = 'tree-chevron' + (isCollapsed ? '' : ' open');
+        chevron.innerHTML = this.svgChevron();
+
+        const icon = document.createElement('span');
+        icon.className = 'tree-icon tree-fav-icon';
+        icon.innerHTML = this.svgStarFilled();
+
+        const label = document.createElement('span');
+        label.className = 'tree-label';
+        label.textContent = '즐겨찾기';
+
+        const count = document.createElement('span');
+        count.className = 'tree-fav-count';
+        count.textContent = favorites.length;
+
+        header.appendChild(chevron);
+        header.appendChild(icon);
+        header.appendChild(label);
+        header.appendChild(count);
+
+        header.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (this.collapsedNodes.has(favKey)) {
+                this.collapsedNodes.delete(favKey);
+            } else {
+                this.collapsedNodes.add(favKey);
+            }
+            await this.render();
+        });
+
+        section.appendChild(header);
+
+        // Favorite items
+        if (!isCollapsed) {
+            const list = document.createElement('div');
+            list.className = 'tree-favorites-list';
+
+            favorites.forEach(fav => {
+                const item = document.createElement('div');
+                item.className = 'tree-file tree-favorite-item';
+                item.dataset.envId = fav.env_id;
+                item.dataset.projectId = fav.project_id;
+                item.dataset.path = fav.path;
+
+                const fileIcon = document.createElement('span');
+                fileIcon.className = 'tree-icon icon-md';
+                fileIcon.innerHTML = this.svgFile();
+
+                const nameEl = document.createElement('span');
+                nameEl.className = 'tree-label';
+                nameEl.textContent = fav.name;
+
+                // Find project name for sublabel
+                let projectLabel = '';
+                for (const env of this.config.environments) {
+                    const prj = env.projects.find(p => p.id === fav.project_id && env.id === fav.env_id);
+                    if (prj) {
+                        projectLabel = prj.name;
+                        break;
+                    }
+                }
+
+                const subEl = document.createElement('span');
+                subEl.className = 'tree-fav-project';
+                subEl.textContent = projectLabel;
+
+                item.appendChild(fileIcon);
+                item.appendChild(nameEl);
+                item.appendChild(subEl);
+
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.selectFile(fav.env_id, fav.project_id, fav.path);
+                });
+
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.emit('favorite-context-menu', {
+                        x: e.clientX,
+                        y: e.clientY,
+                        type: 'favorite',
+                        envId: fav.env_id,
+                        projectId: fav.project_id,
+                        path: fav.path
+                    });
+                });
+
+                list.appendChild(item);
+            });
+
+            section.appendChild(list);
+        }
+
+        this.container.appendChild(section);
     }
 
     async renderEnvironment(env) {
@@ -316,6 +443,13 @@ class FileBrowser {
 
             fileDiv.appendChild(icon);
             fileDiv.appendChild(label);
+
+            if (this.isFavorite(envId, projectId, node.path)) {
+                const favIndicator = document.createElement('span');
+                favIndicator.className = 'fav-indicator';
+                favIndicator.innerHTML = this.svgStarFilled();
+                fileDiv.appendChild(favIndicator);
+            }
 
             fileDiv.addEventListener('click', (e) => {
                 e.stopPropagation();

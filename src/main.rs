@@ -113,6 +113,12 @@ async fn main() -> std::io::Result<()> {
                     .route(web::put().to(routes::update_project))
                     .route(web::delete().to(routes::delete_project))
             )
+            .service(
+                web::resource("/api/favorites")
+                    .route(web::get().to(routes::get_favorites))
+                    .route(web::post().to(routes::add_favorite))
+                    .route(web::delete().to(routes::remove_favorite))
+            )
             .service(fs::Files::new("/static", "./static"))
             .service(web::resource("/").route(web::get().to(index_handler)))
     })
@@ -132,7 +138,7 @@ async fn index_handler() -> HttpResponse {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
-    <link rel="stylesheet" href="/static/css/main.css?v=2">
+    <link rel="stylesheet" href="/static/css/main.css?v=3">
     <link rel="stylesheet" href="/static/vendor/katex.min.css">
 </head>
 <body>
@@ -220,13 +226,13 @@ async fn index_handler() -> HttpResponse {
     <script src="/static/vendor/katex.min.js"></script>
     <script src="/static/vendor/auto-render.min.js"></script>
     <script src="/static/vendor/mermaid.min.js"></script>
-    <script src="/static/js/websocket-client.js?v=2"></script>
-    <script src="/static/js/file-browser.js?v=2"></script>
-    <script src="/static/js/markdown-viewer.js?v=2"></script>
-    <script src="/static/js/context-menu.js?v=2"></script>
-    <script src="/static/js/tab-manager.js?v=2"></script>
-    <script src="/static/js/management.js?v=2"></script>
-    <script src="/static/js/app.js?v=2"></script>
+    <script src="/static/js/websocket-client.js?v=3"></script>
+    <script src="/static/js/file-browser.js?v=3"></script>
+    <script src="/static/js/markdown-viewer.js?v=3"></script>
+    <script src="/static/js/context-menu.js?v=3"></script>
+    <script src="/static/js/tab-manager.js?v=3"></script>
+    <script src="/static/js/management.js?v=3"></script>
+    <script src="/static/js/app.js?v=3"></script>
 </body>
 </html>"#;
 
