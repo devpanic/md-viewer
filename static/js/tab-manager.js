@@ -276,21 +276,160 @@ class TabManager {
 
     updateBreadcrumb(tab) {
         if (!this.breadcrumbEl) return;
+        this.closeBreadcrumbDropdown();
+        this.breadcrumbEl.innerHTML = '';
+
         const parts = tab.path.split('/').filter(p => p);
         const fileName = parts.pop() || tab.path;
 
-        let html = '';
+        // Project root item
         if (tab.projectId) {
-            html += '<span class="breadcrumb-item">' + this.escapeHtml(tab.projectId) + '</span>';
-            html += '<span class="breadcrumb-sep">/</span>';
+            this.breadcrumbEl.appendChild(this._bcItem(tab.projectId, '', tab));
+            this.breadcrumbEl.appendChild(this._bcSep());
         }
-        parts.forEach(part => {
-            html += '<span class="breadcrumb-item">' + this.escapeHtml(part) + '</span>';
-            html += '<span class="breadcrumb-sep">/</span>';
-        });
-        html += '<span class="breadcrumb-item current">' + this.escapeHtml(fileName) + '</span>';
 
-        this.breadcrumbEl.innerHTML = html;
+        // Directory parts
+        let dirPath = '';
+        parts.forEach(part => {
+            dirPath += '/' + part;
+            this.breadcrumbEl.appendChild(this._bcItem(part, dirPath, tab));
+            this.breadcrumbEl.appendChild(this._bcSep());
+        });
+
+        // Current file (no dropdown)
+        const cur = document.createElement('span');
+        cur.className = 'breadcrumb-item current';
+        cur.textContent = fileName;
+        this.breadcrumbEl.appendChild(cur);
+    }
+
+    _bcItem(text, dirPath, tab) {
+        const el = document.createElement('span');
+        el.className = 'breadcrumb-item';
+        el.textContent = text;
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showBreadcrumbDropdown(dirPath, tab, el);
+        });
+        return el;
+    }
+
+    _bcSep() {
+        const el = document.createElement('span');
+        el.className = 'breadcrumb-sep';
+        el.textContent = '/';
+        return el;
+    }
+
+    showBreadcrumbDropdown(dirPath, tab, anchorEl) {
+        this.closeBreadcrumbDropdown();
+
+        if (typeof fileBrowser === 'undefined') return;
+        const projectKey = `project:${tab.envId}:${tab.projectId}`;
+        const fileTree = fileBrowser.projectFileCache.get(projectKey);
+        if (!fileTree) return;
+
+        // Navigate to the target directory node
+        let node = fileTree;
+        if (dirPath) {
+            const pathParts = dirPath.split('/').filter(p => p);
+            for (const part of pathParts) {
+                if (!node.children) return;
+                const child = node.children.find(c => c.name === part && c.is_dir);
+                if (!child) return;
+                node = child;
+            }
+        }
+
+        if (!node.children || node.children.length === 0) return;
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'breadcrumb-dropdown';
+
+        node.children.forEach(child => {
+            const item = document.createElement('div');
+            item.className = 'breadcrumb-dropdown-item';
+
+            const icon = document.createElement('span');
+            icon.className = 'breadcrumb-dropdown-icon';
+            if (child.is_dir) {
+                item.classList.add('is-dir');
+                icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+            } else {
+                icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+            }
+
+            const label = document.createElement('span');
+            label.textContent = child.name;
+
+            item.appendChild(icon);
+            item.appendChild(label);
+
+            if (!child.is_dir) {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.closeBreadcrumbDropdown();
+                    this.openTab(tab.envId, tab.projectId, child.path);
+                });
+
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.closeBreadcrumbDropdown();
+                    if (this.onTabContextMenu) {
+                        this.onTabContextMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            type: 'file',
+                            envId: tab.envId,
+                            projectId: tab.projectId,
+                            path: child.path
+                        });
+                    }
+                });
+            }
+
+            dropdown.appendChild(item);
+        });
+
+        // Position below the anchor
+        const rect = anchorEl.getBoundingClientRect();
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+        document.body.appendChild(dropdown);
+        this._bcDropdown = dropdown;
+
+        // Boundary check
+        requestAnimationFrame(() => {
+            const dr = dropdown.getBoundingClientRect();
+            if (dr.right > window.innerWidth) {
+                dropdown.style.left = (window.innerWidth - dr.width - 4) + 'px';
+            }
+            if (dr.bottom > window.innerHeight) {
+                dropdown.style.top = (rect.top - dr.height - 4) + 'px';
+            }
+        });
+
+        // Close on outside click
+        setTimeout(() => {
+            this._bcDropdownClose = (e) => {
+                if (!dropdown.contains(e.target)) {
+                    this.closeBreadcrumbDropdown();
+                }
+            };
+            document.addEventListener('click', this._bcDropdownClose);
+        }, 0);
+    }
+
+    closeBreadcrumbDropdown() {
+        if (this._bcDropdown) {
+            this._bcDropdown.remove();
+            this._bcDropdown = null;
+        }
+        if (this._bcDropdownClose) {
+            document.removeEventListener('click', this._bcDropdownClose);
+            this._bcDropdownClose = null;
+        }
     }
 
     clearBreadcrumb() {
