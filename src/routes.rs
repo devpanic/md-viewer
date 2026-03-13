@@ -377,6 +377,8 @@ pub struct FavoriteRequest {
     env_id: String,
     project_id: String,
     path: String,
+    #[serde(default)]
+    is_dir: bool,
 }
 
 pub async fn get_favorites(data: web::Data<Arc<AppState>>) -> Result<HttpResponse> {
@@ -392,6 +394,7 @@ pub async fn add_favorite(
         req.env_id.clone(),
         req.project_id.clone(),
         req.path.clone(),
+        req.is_dir,
     ) {
         Ok(_) => Ok(HttpResponse::Ok().json(serde_json::json!({
             "success": true,

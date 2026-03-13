@@ -29,6 +29,8 @@ pub struct Favorite {
     pub path: String,
     pub name: String,
     pub added_at: u64,
+    #[serde(default)]
+    pub is_dir: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,7 +218,7 @@ impl ProjectManager {
         self.config.read().unwrap().favorites.clone()
     }
 
-    pub fn add_favorite(&self, env_id: String, project_id: String, path: String) -> Result<()> {
+    pub fn add_favorite(&self, env_id: String, project_id: String, path: String, is_dir: bool) -> Result<()> {
         let mut config = self.config.write().unwrap();
 
         // Duplicate check
@@ -227,22 +229,30 @@ impl ProjectManager {
             anyhow::bail!("Already in favorites");
         }
 
-        // Validate environment and project exist
+        // Validate environment exists
         let env = config.environments.iter()
             .find(|e| e.id == env_id)
             .context("Environment not found")?;
-        let _project = env.projects.iter()
-            .find(|p| p.id == project_id)
-            .context("Project not found")?;
 
-        let name = path.split('/').last().unwrap_or(&path).to_string();
+        // Validate project exists (skip for environment-level favorites)
+        if !project_id.is_empty() {
+            let _project = env.projects.iter()
+                .find(|p| p.id == project_id)
+                .context("Project not found")?;
+        }
+
+        let name = if path.is_empty() {
+            env.name.clone()
+        } else {
+            path.split('/').last().unwrap_or(&path).to_string()
+        };
         let added_at = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
         config.favorites.push(Favorite {
-            env_id, project_id, path, name, added_at
+            env_id, project_id, path, name, added_at, is_dir
         });
 
         drop(config);

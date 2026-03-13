@@ -136,19 +136,11 @@ class FileBrowser {
             list.className = 'tree-favorites-list';
 
             favorites.forEach(fav => {
-                const item = document.createElement('div');
-                item.className = 'tree-file tree-favorite-item';
-                item.dataset.envId = fav.env_id;
-                item.dataset.projectId = fav.project_id;
-                item.dataset.path = fav.path;
-
-                const fileIcon = document.createElement('span');
-                fileIcon.className = 'tree-icon icon-md';
-                fileIcon.innerHTML = this.svgFile();
-
-                const nameEl = document.createElement('span');
-                nameEl.className = 'tree-label';
-                nameEl.textContent = fav.name;
+                // Environment-level favorite
+                if (!fav.project_id) {
+                    this.renderFavoriteEnv(list, fav);
+                    return;
+                }
 
                 // Find project name for sublabel
                 let projectLabel = '';
@@ -160,39 +152,405 @@ class FileBrowser {
                     }
                 }
 
-                const subEl = document.createElement('span');
-                subEl.className = 'tree-fav-project';
-                subEl.textContent = projectLabel;
+                // Project-level favorite (project_id set, path empty)
+                if (!fav.path) {
+                    this.renderFavoriteProject(list, fav);
+                    return;
+                }
 
-                item.appendChild(fileIcon);
-                item.appendChild(nameEl);
-                item.appendChild(subEl);
-
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.selectFile(fav.env_id, fav.project_id, fav.path);
-                });
-
-                item.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.emit('favorite-context-menu', {
-                        x: e.clientX,
-                        y: e.clientY,
-                        type: 'favorite',
-                        envId: fav.env_id,
-                        projectId: fav.project_id,
-                        path: fav.path
-                    });
-                });
-
-                list.appendChild(item);
+                if (fav.is_dir) {
+                    this.renderFavoriteDir(list, fav, projectLabel);
+                } else {
+                    this.renderFavoriteFile(list, fav, projectLabel);
+                }
             });
 
             section.appendChild(list);
         }
 
         this.container.appendChild(section);
+    }
+
+    renderFavoriteFile(parent, fav, projectLabel) {
+        const item = document.createElement('div');
+        item.className = 'tree-file tree-favorite-item';
+        item.dataset.envId = fav.env_id;
+        item.dataset.projectId = fav.project_id;
+        item.dataset.path = fav.path;
+
+        const fileIcon = document.createElement('span');
+        fileIcon.className = 'tree-icon icon-md';
+        fileIcon.innerHTML = this.svgFile();
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'tree-label';
+        nameEl.textContent = fav.name;
+
+        const subEl = document.createElement('span');
+        subEl.className = 'tree-fav-project';
+        subEl.textContent = projectLabel;
+
+        item.appendChild(fileIcon);
+        item.appendChild(nameEl);
+        item.appendChild(subEl);
+
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.selectFile(fav.env_id, fav.project_id, fav.path);
+        });
+
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.emit('favorite-context-menu', {
+                x: e.clientX, y: e.clientY,
+                type: 'favorite',
+                envId: fav.env_id, projectId: fav.project_id,
+                path: fav.path, isDir: false
+            });
+        });
+
+        parent.appendChild(item);
+    }
+
+    renderFavoriteEnv(parent, fav) {
+        const favEnvKey = `fav-env:${fav.env_id}`;
+        const isCollapsed = this.collapsedNodes.has(favEnvKey);
+
+        // Find the environment data
+        const env = this.config.environments.find(e => e.id === fav.env_id);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'tree-favorite-dir-wrapper';
+
+        // Header row
+        const header = document.createElement('div');
+        header.className = 'tree-favorite-item tree-favorite-dir-header';
+
+        const chevron = document.createElement('span');
+        chevron.className = 'tree-chevron' + (isCollapsed ? '' : ' open');
+        chevron.innerHTML = this.svgChevron();
+
+        const envIcon = document.createElement('span');
+        envIcon.className = 'tree-icon';
+        envIcon.innerHTML = this.svgServer();
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'tree-label';
+        nameEl.textContent = env ? env.name : fav.name;
+
+        header.appendChild(chevron);
+        header.appendChild(envIcon);
+        header.appendChild(nameEl);
+
+        header.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (this.collapsedNodes.has(favEnvKey)) {
+                this.collapsedNodes.delete(favEnvKey);
+            } else {
+                this.collapsedNodes.add(favEnvKey);
+            }
+            await this.render();
+        });
+
+        header.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.emit('favorite-context-menu', {
+                x: e.clientX, y: e.clientY,
+                type: 'favorite',
+                envId: fav.env_id, projectId: '',
+                path: '', isDir: false, isEnv: true
+            });
+        });
+
+        wrapper.appendChild(header);
+
+        // Children: show projects when expanded
+        if (!isCollapsed && env) {
+            const childrenDiv = document.createElement('div');
+            childrenDiv.className = 'tree-favorites-dir-children';
+
+            if (env.projects.length > 0) {
+                for (const project of env.projects) {
+                    const projectKey = `project:${env.id}:${project.id}`;
+                    const projIsCollapsed = this.collapsedNodes.has(`fav-env-prj:${env.id}:${project.id}`);
+
+                    const projHeader = document.createElement('div');
+                    projHeader.className = 'tree-favorite-item tree-favorite-dir-header';
+
+                    const projChevron = document.createElement('span');
+                    projChevron.className = 'tree-chevron' + (projIsCollapsed ? '' : ' open');
+                    projChevron.innerHTML = this.svgChevron();
+
+                    const projIcon = document.createElement('span');
+                    projIcon.className = 'tree-icon';
+                    projIcon.innerHTML = this.svgProject();
+
+                    const projLabel = document.createElement('span');
+                    projLabel.className = 'tree-label';
+                    projLabel.textContent = project.name;
+
+                    projHeader.appendChild(projChevron);
+                    projHeader.appendChild(projIcon);
+                    projHeader.appendChild(projLabel);
+
+                    projHeader.addEventListener('click', async (ev) => {
+                        ev.stopPropagation();
+                        const key = `fav-env-prj:${env.id}:${project.id}`;
+                        if (!this.projectFileCache.has(projectKey)) {
+                            await this.loadProjectFiles(env.id, project.id);
+                        }
+                        if (this.collapsedNodes.has(key)) {
+                            this.collapsedNodes.delete(key);
+                        } else {
+                            this.collapsedNodes.add(key);
+                        }
+                        await this.render();
+                    });
+
+                    childrenDiv.appendChild(projHeader);
+
+                    // Project files when expanded
+                    if (!projIsCollapsed) {
+                        const filesDiv = document.createElement('div');
+                        filesDiv.className = 'tree-favorites-dir-children';
+
+                        const fileTree = this.projectFileCache.get(projectKey);
+                        if (!fileTree) {
+                            const loadingEl = document.createElement('div');
+                            loadingEl.className = 'tree-file';
+                            loadingEl.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">로딩 중...</span>';
+                            filesDiv.appendChild(loadingEl);
+                            this.loadProjectFiles(env.id, project.id).then(() => this.render());
+                        } else if (fileTree.children && fileTree.children.length > 0) {
+                            fileTree.children.forEach(child => {
+                                this.renderFileNode(filesDiv, child, `${projectKey}:`, env.id, project.id);
+                            });
+                        }
+
+                        childrenDiv.appendChild(filesDiv);
+                    }
+                }
+            } else {
+                const emptyEl = document.createElement('div');
+                emptyEl.className = 'tree-file';
+                emptyEl.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">프로젝트 없음</span>';
+                childrenDiv.appendChild(emptyEl);
+            }
+
+            wrapper.appendChild(childrenDiv);
+        }
+
+        parent.appendChild(wrapper);
+    }
+
+    renderFavoriteProject(parent, fav) {
+        const favPrjKey = `fav-prj:${fav.env_id}:${fav.project_id}`;
+        const isCollapsed = this.collapsedNodes.has(favPrjKey);
+        const projectKey = `project:${fav.env_id}:${fav.project_id}`;
+
+        // Find project data
+        let project = null;
+        let envName = '';
+        for (const env of this.config.environments) {
+            if (env.id === fav.env_id) {
+                envName = env.name;
+                project = env.projects.find(p => p.id === fav.project_id);
+                break;
+            }
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'tree-favorite-dir-wrapper';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'tree-favorite-item tree-favorite-dir-header';
+
+        const chevron = document.createElement('span');
+        chevron.className = 'tree-chevron' + (isCollapsed ? '' : ' open');
+        chevron.innerHTML = this.svgChevron();
+
+        const projIcon = document.createElement('span');
+        projIcon.className = 'tree-icon';
+        projIcon.innerHTML = this.svgProject();
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'tree-label';
+        nameEl.textContent = project ? project.name : fav.name;
+
+        const subEl = document.createElement('span');
+        subEl.className = 'tree-fav-project';
+        subEl.textContent = envName;
+
+        header.appendChild(chevron);
+        header.appendChild(projIcon);
+        header.appendChild(nameEl);
+        header.appendChild(subEl);
+
+        header.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!this.projectFileCache.has(projectKey)) {
+                await this.loadProjectFiles(fav.env_id, fav.project_id);
+            }
+            if (this.collapsedNodes.has(favPrjKey)) {
+                this.collapsedNodes.delete(favPrjKey);
+            } else {
+                this.collapsedNodes.add(favPrjKey);
+            }
+            await this.render();
+        });
+
+        header.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.emit('favorite-context-menu', {
+                x: e.clientX, y: e.clientY,
+                type: 'favorite',
+                envId: fav.env_id, projectId: fav.project_id,
+                path: '', isDir: false, isEnv: false, isProject: true
+            });
+        });
+
+        wrapper.appendChild(header);
+
+        // Files when expanded
+        if (!isCollapsed) {
+            const childrenDiv = document.createElement('div');
+            childrenDiv.className = 'tree-favorites-dir-children';
+
+            const fileTree = this.projectFileCache.get(projectKey);
+            if (!fileTree) {
+                const loadingEl = document.createElement('div');
+                loadingEl.className = 'tree-file';
+                loadingEl.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">로딩 중...</span>';
+                childrenDiv.appendChild(loadingEl);
+                this.loadProjectFiles(fav.env_id, fav.project_id).then(() => this.render());
+            } else if (fileTree.children && fileTree.children.length > 0) {
+                fileTree.children.forEach(child => {
+                    this.renderFileNode(childrenDiv, child, `${projectKey}:`, fav.env_id, fav.project_id);
+                });
+            } else {
+                const emptyEl = document.createElement('div');
+                emptyEl.className = 'tree-file';
+                emptyEl.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">파일이 없습니다</span>';
+                childrenDiv.appendChild(emptyEl);
+            }
+
+            wrapper.appendChild(childrenDiv);
+        }
+
+        parent.appendChild(wrapper);
+    }
+
+    renderFavoriteDir(parent, fav, projectLabel) {
+        const favDirKey = `fav-dir:${fav.env_id}:${fav.project_id}:${fav.path}`;
+        const isCollapsed = this.collapsedNodes.has(favDirKey);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'tree-favorite-dir-wrapper';
+
+        // Header row
+        const header = document.createElement('div');
+        header.className = 'tree-favorite-item tree-favorite-dir-header';
+
+        const chevron = document.createElement('span');
+        chevron.className = 'tree-chevron' + (isCollapsed ? '' : ' open');
+        chevron.innerHTML = this.svgChevron();
+
+        const folderIcon = document.createElement('span');
+        folderIcon.className = 'tree-icon';
+        folderIcon.innerHTML = isCollapsed ? this.svgFolder() : this.svgFolderOpen();
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'tree-label';
+        nameEl.textContent = fav.name;
+
+        const subEl = document.createElement('span');
+        subEl.className = 'tree-fav-project';
+        subEl.textContent = projectLabel;
+
+        header.appendChild(chevron);
+        header.appendChild(folderIcon);
+        header.appendChild(nameEl);
+        header.appendChild(subEl);
+
+        header.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            // Ensure project files are loaded
+            const projectKey = `project:${fav.env_id}:${fav.project_id}`;
+            if (!this.projectFileCache.has(projectKey)) {
+                await this.loadProjectFiles(fav.env_id, fav.project_id);
+            }
+            if (this.collapsedNodes.has(favDirKey)) {
+                this.collapsedNodes.delete(favDirKey);
+            } else {
+                this.collapsedNodes.add(favDirKey);
+            }
+            await this.render();
+        });
+
+        header.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.emit('favorite-context-menu', {
+                x: e.clientX, y: e.clientY,
+                type: 'favorite',
+                envId: fav.env_id, projectId: fav.project_id,
+                path: fav.path, isDir: true
+            });
+        });
+
+        wrapper.appendChild(header);
+
+        // Children (when expanded)
+        if (!isCollapsed) {
+            const childrenDiv = document.createElement('div');
+            childrenDiv.className = 'tree-favorites-dir-children';
+
+            const projectKey = `project:${fav.env_id}:${fav.project_id}`;
+            const fileTree = this.projectFileCache.get(projectKey);
+
+            if (!fileTree) {
+                const loadingEl = document.createElement('div');
+                loadingEl.className = 'tree-file';
+                loadingEl.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">로딩 중...</span>';
+                childrenDiv.appendChild(loadingEl);
+
+                this.loadProjectFiles(fav.env_id, fav.project_id).then(() => this.render());
+            } else {
+                // Find the directory node in file tree
+                const dirNode = this.findNodeByPath(fileTree, fav.path);
+                if (dirNode && dirNode.children) {
+                    dirNode.children.forEach(child => {
+                        this.renderFileNode(childrenDiv, child, `${projectKey}:`, fav.env_id, fav.project_id);
+                    });
+                } else {
+                    const emptyEl = document.createElement('div');
+                    emptyEl.className = 'tree-file';
+                    emptyEl.innerHTML = '<span class="tree-label" style="color: var(--text-muted); font-style: italic;">비어 있음</span>';
+                    childrenDiv.appendChild(emptyEl);
+                }
+            }
+
+            wrapper.appendChild(childrenDiv);
+        }
+
+        parent.appendChild(wrapper);
+    }
+
+    findNodeByPath(tree, targetPath) {
+        if (!tree.children) return null;
+        const parts = targetPath.split('/').filter(p => p);
+        let node = tree;
+        for (const part of parts) {
+            if (!node.children) return null;
+            const child = node.children.find(c => c.name === part && c.is_dir);
+            if (!child) return null;
+            node = child;
+        }
+        return node;
     }
 
     async renderEnvironment(env) {
@@ -229,6 +587,13 @@ class FileBrowser {
             badge.className = 'tree-badge';
             badge.textContent = '현재';
             headerDiv.appendChild(badge);
+        }
+
+        if (this.isFavorite(env.id, '', '')) {
+            const favIndicator = document.createElement('span');
+            favIndicator.className = 'fav-indicator';
+            favIndicator.innerHTML = this.svgStarFilled();
+            headerDiv.appendChild(favIndicator);
         }
 
         headerDiv.addEventListener('click', async (e) => {
@@ -289,6 +654,13 @@ class FileBrowser {
         headerDiv.appendChild(chevron);
         headerDiv.appendChild(icon);
         headerDiv.appendChild(label);
+
+        if (this.isFavorite(env.id, project.id, '')) {
+            const favIndicator = document.createElement('span');
+            favIndicator.className = 'fav-indicator';
+            favIndicator.innerHTML = this.svgStarFilled();
+            headerDiv.appendChild(favIndicator);
+        }
 
         headerDiv.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -410,6 +782,24 @@ class FileBrowser {
                     childrenDiv.classList.add('collapsed');
                 }
             });
+
+            dirHeader.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.emit('dir-context-menu', {
+                    x: e.clientX,
+                    y: e.clientY,
+                    type: 'directory',
+                    envId, projectId, path: node.path
+                });
+            });
+
+            if (this.isFavorite(envId, projectId, node.path)) {
+                const favIndicator = document.createElement('span');
+                favIndicator.className = 'fav-indicator';
+                favIndicator.innerHTML = this.svgStarFilled();
+                dirHeader.appendChild(favIndicator);
+            }
 
             parent.appendChild(dirHeader);
 

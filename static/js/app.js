@@ -148,20 +148,33 @@ function initialize() {
         }
     });
 
-    // Favorite: add/remove from file context menu
+    // Favorite: add/remove from file, directory, and environment context menus
+    const favTypes = ['file', 'directory', 'environment', 'project'];
     contextMenu.addItem({
         id: 'add-favorite',
         label: '즐겨찾기 추가',
         icon: '<svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
         group: 'favorite',
         order: 1,
-        visible: (ctx) => ctx.type === 'file' && !fileBrowser.isFavorite(ctx.envId, ctx.projectId, ctx.path),
+        visible: (ctx) => {
+            if (!favTypes.includes(ctx.type)) return false;
+            const pid = ctx.type === 'environment' ? '' : (ctx.projectId || '');
+            const path = (ctx.type === 'environment' || ctx.type === 'project') ? '' : (ctx.path || '');
+            return !fileBrowser.isFavorite(ctx.envId, pid, path);
+        },
         handler: async (ctx) => {
             try {
+                const isEnv = ctx.type === 'environment';
+                const isPrj = ctx.type === 'project';
                 const res = await fetch('/api/favorites', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ env_id: ctx.envId, project_id: ctx.projectId, path: ctx.path })
+                    body: JSON.stringify({
+                        env_id: ctx.envId,
+                        project_id: isEnv ? '' : (ctx.projectId || ''),
+                        path: (isEnv || isPrj) ? '' : (ctx.path || ''),
+                        is_dir: ctx.type === 'directory'
+                    })
                 });
                 if (!res.ok) throw new Error('Failed');
                 await fileBrowser.loadProjectTree();
@@ -177,13 +190,24 @@ function initialize() {
         icon: '<svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/><line x1="4" y1="4" x2="20" y2="20"/></svg>',
         group: 'favorite',
         order: 1,
-        visible: (ctx) => ctx.type === 'file' && fileBrowser.isFavorite(ctx.envId, ctx.projectId, ctx.path),
+        visible: (ctx) => {
+            if (!favTypes.includes(ctx.type)) return false;
+            const pid = ctx.type === 'environment' ? '' : (ctx.projectId || '');
+            const path = (ctx.type === 'environment' || ctx.type === 'project') ? '' : (ctx.path || '');
+            return fileBrowser.isFavorite(ctx.envId, pid, path);
+        },
         handler: async (ctx) => {
             try {
+                const isEnv = ctx.type === 'environment';
+                const isPrj = ctx.type === 'project';
                 const res = await fetch('/api/favorites', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ env_id: ctx.envId, project_id: ctx.projectId, path: ctx.path })
+                    body: JSON.stringify({
+                        env_id: ctx.envId,
+                        project_id: isEnv ? '' : (ctx.projectId || ''),
+                        path: (isEnv || isPrj) ? '' : (ctx.path || '')
+                    })
                 });
                 if (!res.ok) throw new Error('Failed');
                 await fileBrowser.loadProjectTree();
@@ -278,7 +302,7 @@ function initialize() {
         icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
         group: 'fav-open',
         order: 1,
-        visible: (ctx) => ctx.type === 'favorite',
+        visible: (ctx) => ctx.type === 'favorite' && !ctx.isDir && !ctx.isEnv && !ctx.isProject,
         handler: (ctx) => tabManager.openTabInPane(ctx.envId, ctx.projectId, ctx.path, '1')
     });
 
@@ -288,7 +312,7 @@ function initialize() {
         icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>',
         group: 'fav-open',
         order: 2,
-        visible: (ctx) => ctx.type === 'favorite',
+        visible: (ctx) => ctx.type === 'favorite' && !ctx.isDir && !ctx.isEnv && !ctx.isProject,
         handler: (ctx) => {
             if (!tabManager.isSplit) {
                 tabManager.toggleSplitView();
@@ -336,6 +360,10 @@ function initialize() {
     });
 
     fileBrowser.on('project-context-menu', (data) => {
+        contextMenu.show(data.x, data.y, data);
+    });
+
+    fileBrowser.on('dir-context-menu', (data) => {
         contextMenu.show(data.x, data.y, data);
     });
 

@@ -326,7 +326,43 @@ body {
     white-space: nowrap;
 }
 
+/* Favorite directory */
+.tree-favorite-dir-header {
+    cursor: pointer;
+}
+
+.tree-favorite-dir-header:hover {
+    background: var(--surface-hover);
+}
+
+.tree-favorites-dir-children {
+    padding-left: 12px;
+}
+
 /* Favorite indicator in file tree */
+.tree-env-header .fav-indicator,
+.tree-project-header .fav-indicator,
+.tree-dir-header .fav-indicator {
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.45;
+}
+
+.tree-env-header .fav-indicator svg,
+.tree-project-header .fav-indicator svg,
+.tree-dir-header .fav-indicator svg {
+    width: 10px;
+    height: 10px;
+    fill: var(--accent);
+    stroke: var(--accent);
+    stroke-width: 1.5;
+}
+
 .tree-file .fav-indicator {
     width: 14px;
     height: 14px;
