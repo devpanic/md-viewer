@@ -45,9 +45,19 @@ class TabManager {
             this.toggleSplitView();
         });
 
-        // Show welcome screen on init
-        this.showWelcome('1');
-        this.showWelcome('2');
+        // Home button
+        this.homeBtn = document.getElementById('home-btn');
+        if (this.homeBtn) {
+            this.homeBtn.addEventListener('click', () => {
+                this.resetToHome();
+            });
+        }
+
+        // Restore saved state or show welcome
+        if (!this.restoreState()) {
+            this.showWelcome('1');
+            this.showWelcome('2');
+        }
     }
 
     getPaneIdForViewer(viewer) {
@@ -111,6 +121,7 @@ class TabManager {
         this.setActivePane(paneId);
         this.renderTabBar(paneId);
         this.updateBreadcrumb(tab);
+        this.persistState();
 
         await pane.viewer.loadFile(envId, projectId, path);
     }
@@ -147,6 +158,7 @@ class TabManager {
         }
 
         this.renderTabBar(paneId);
+        this.persistState();
     }
 
     switchTab(tabId) {
@@ -159,6 +171,7 @@ class TabManager {
         pane.activeTabId = tabId;
         this.renderTabBar(tab.paneId);
         this.updateBreadcrumb(tab);
+        this.persistState();
 
         pane.viewer.loadFile(tab.envId, tab.projectId, tab.path).then(() => {
             pane.contentEl.scrollTop = tab.scrollPosition;
@@ -193,6 +206,7 @@ class TabManager {
 
         this.renderTabBar(srcPaneId);
         this.renderTabBar(targetPaneId);
+        this.persistState();
     }
 
     saveScrollPosition(paneId) {
@@ -224,6 +238,7 @@ class TabManager {
             this.isSplit = true;
             this.panes['2'].el.style.display = '';
             this.splitToggleBtn.classList.add('active');
+            this.persistState();
         }
     }
 
@@ -256,6 +271,7 @@ class TabManager {
         this.setActivePane('1');
         this.renderTabBar('1');
         this.renderTabBar('2');
+        this.persistState();
     }
 
     showWelcome(paneId) {
@@ -639,6 +655,7 @@ class TabManager {
         order.splice(toIdx, 0, draggedId);
 
         this.renderTabBar(paneId);
+        this.persistState();
     }
 
     refreshTab(tabId, paneId) {
@@ -663,5 +680,140 @@ class TabManager {
                 }
             }
         }
+    }
+
+    // State persistence
+    persistState() {
+        const state = {
+            tabs: [],
+            activePaneId: this.activePaneId,
+            isSplit: this.isSplit,
+            pane1Active: null,
+            pane2Active: null,
+        };
+
+        // Save tabs in pane order
+        ['1', '2'].forEach(paneId => {
+            const pane = this.panes[paneId];
+            pane.tabOrder.forEach(tabId => {
+                const tab = this.tabs.get(tabId);
+                if (tab) {
+                    state.tabs.push({
+                        envId: tab.envId,
+                        projectId: tab.projectId,
+                        path: tab.path,
+                        paneId: tab.paneId,
+                    });
+                }
+            });
+            if (pane.activeTabId) {
+                const activeTab = this.tabs.get(pane.activeTabId);
+                if (activeTab) {
+                    state['pane' + paneId + 'Active'] = activeTab.envId + ':' + activeTab.projectId + ':' + activeTab.path;
+                }
+            }
+        });
+
+        localStorage.setItem('md-viewer-tab-state', JSON.stringify(state));
+    }
+
+    restoreState() {
+        const raw = localStorage.getItem('md-viewer-tab-state');
+        if (!raw) return false;
+
+        let state;
+        try {
+            state = JSON.parse(raw);
+        } catch (e) {
+            return false;
+        }
+
+        if (!state.tabs || state.tabs.length === 0) return false;
+
+        // Restore split view first
+        if (state.isSplit) {
+            this.isSplit = true;
+            this.panes['2'].el.style.display = '';
+            this.splitToggleBtn.classList.add('active');
+        }
+
+        // Create all tabs without loading files
+        const activeKeys = {
+            '1': state.pane1Active,
+            '2': state.pane2Active,
+        };
+
+        state.tabs.forEach(t => {
+            const paneId = t.paneId;
+            const pane = this.panes[paneId];
+            if (!pane) return;
+
+            const tabId = this.generateTabId();
+            const label = t.path.split('/').pop() || t.path;
+            const tab = { id: tabId, envId: t.envId, projectId: t.projectId, path: t.path, label, paneId, scrollPosition: 0 };
+
+            this.tabs.set(tabId, tab);
+            pane.tabOrder.push(tabId);
+
+            // Set active tab per pane
+            const key = t.envId + ':' + t.projectId + ':' + t.path;
+            if (activeKeys[paneId] === key) {
+                pane.activeTabId = tabId;
+            }
+        });
+
+        // Fallback: if no active tab was matched, use last tab in pane
+        ['1', '2'].forEach(paneId => {
+            const pane = this.panes[paneId];
+            if (pane.tabOrder.length > 0 && !pane.activeTabId) {
+                pane.activeTabId = pane.tabOrder[pane.tabOrder.length - 1];
+            }
+        });
+
+        // Render tab bars
+        this.renderTabBar('1');
+        this.renderTabBar('2');
+
+        // Set active pane
+        this.setActivePane(state.activePaneId || '1');
+
+        // Load active tab content for each pane
+        ['1', '2'].forEach(paneId => {
+            const pane = this.panes[paneId];
+            if (pane.activeTabId) {
+                const tab = this.tabs.get(pane.activeTabId);
+                if (tab) {
+                    this.updateBreadcrumb(tab);
+                    pane.viewer.loadFile(tab.envId, tab.projectId, tab.path);
+                }
+            } else {
+                this.showWelcome(paneId);
+            }
+        });
+
+        return true;
+    }
+
+    resetToHome() {
+        // Close all tabs
+        this.tabs.clear();
+        ['1', '2'].forEach(paneId => {
+            const pane = this.panes[paneId];
+            pane.tabOrder = [];
+            pane.activeTabId = null;
+            this.renderTabBar(paneId);
+            this.showWelcome(paneId);
+        });
+
+        // Reset split view
+        if (this.isSplit) {
+            this.isSplit = false;
+            this.panes['2'].el.style.display = 'none';
+            this.splitToggleBtn.classList.remove('active');
+        }
+
+        this.setActivePane('1');
+        this.clearBreadcrumb();
+        localStorage.removeItem('md-viewer-tab-state');
     }
 }
