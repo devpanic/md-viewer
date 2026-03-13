@@ -55,11 +55,11 @@ function initThemePicker() {
     const saved = localStorage.getItem('md-viewer-theme') || 'green';
     setTheme(saved);
 
-    // Toggle dropdown
-    const pickerBtn = document.getElementById('theme-picker-btn');
+    // Toggle dropdown via settings (gear) button
+    const settingsBtn = document.getElementById('settings-btn');
     const dropdown = document.getElementById('theme-dropdown');
 
-    pickerBtn.addEventListener('click', (e) => {
+    settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         dropdown.classList.toggle('open');
     });
