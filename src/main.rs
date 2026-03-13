@@ -132,7 +132,7 @@ async fn index_handler() -> HttpResponse {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
-    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/main.css?v=2">
     <link rel="stylesheet" href="/static/vendor/katex.min.css">
 </head>
 <body>
@@ -223,13 +223,13 @@ async fn index_handler() -> HttpResponse {
     <script src="/static/vendor/katex.min.js"></script>
     <script src="/static/vendor/auto-render.min.js"></script>
     <script src="/static/vendor/mermaid.min.js"></script>
-    <script src="/static/js/websocket-client.js"></script>
-    <script src="/static/js/file-browser.js"></script>
-    <script src="/static/js/markdown-viewer.js"></script>
-    <script src="/static/js/context-menu.js"></script>
-    <script src="/static/js/tab-manager.js"></script>
-    <script src="/static/js/management.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/websocket-client.js?v=2"></script>
+    <script src="/static/js/file-browser.js?v=2"></script>
+    <script src="/static/js/markdown-viewer.js?v=2"></script>
+    <script src="/static/js/context-menu.js?v=2"></script>
+    <script src="/static/js/tab-manager.js?v=2"></script>
+    <script src="/static/js/management.js?v=2"></script>
+    <script src="/static/js/app.js?v=2"></script>
 </body>
 </html>"#;
 
