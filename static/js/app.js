@@ -103,6 +103,9 @@ function initialize() {
     // Initialize TabManager
     tabManager = new TabManager();
     tabManager.init();
+    tabManager.onTabContextMenu = (data) => {
+        contextMenu.show(data.x, data.y, data);
+    };
 
     // Initialize ContextMenu
     contextMenu = new ContextMenu();

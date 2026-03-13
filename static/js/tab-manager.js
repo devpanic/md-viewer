@@ -377,6 +377,22 @@ class TabManager {
                 }
             });
 
+            // Right click context menu (same as file context menu)
+            tabEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.onTabContextMenu) {
+                    this.onTabContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        type: 'file',
+                        envId: tab.envId,
+                        projectId: tab.projectId,
+                        path: tab.path
+                    });
+                }
+            });
+
             // -- Drag and drop --
             tabEl.addEventListener('dragstart', (e) => {
                 this.draggedTabId = tabId;
