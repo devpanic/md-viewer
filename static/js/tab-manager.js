@@ -65,10 +65,13 @@ class TabManager {
         return envId + ':' + projectId + ':' + path;
     }
 
-    findTabByPath(envId, projectId, path) {
+    findTabInPane(envId, projectId, path, paneId) {
         const key = this.getTabKey(envId, projectId, path);
-        for (const [, tab] of this.tabs) {
-            if (this.getTabKey(tab.envId, tab.projectId, tab.path) === key) {
+        const pane = this.panes[paneId];
+        if (!pane) return null;
+        for (const tabId of pane.tabOrder) {
+            const tab = this.tabs.get(tabId);
+            if (tab && this.getTabKey(tab.envId, tab.projectId, tab.path) === key) {
                 return tab;
             }
         }
@@ -76,9 +79,8 @@ class TabManager {
     }
 
     openTab(envId, projectId, path) {
-        const existing = this.findTabByPath(envId, projectId, path);
+        const existing = this.findTabInPane(envId, projectId, path, this.activePaneId);
         if (existing) {
-            this.setActivePane(existing.paneId);
             this.switchTab(existing.id);
             return Promise.resolve();
         }
@@ -86,11 +88,8 @@ class TabManager {
     }
 
     async openTabInPane(envId, projectId, path, paneId) {
-        const existing = this.findTabByPath(envId, projectId, path);
+        const existing = this.findTabInPane(envId, projectId, path, paneId);
         if (existing) {
-            if (existing.paneId !== paneId) {
-                this.moveTabToPane(existing.id, paneId);
-            }
             this.setActivePane(paneId);
             this.switchTab(existing.id);
             return;

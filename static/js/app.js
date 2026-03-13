@@ -113,7 +113,7 @@ function initialize() {
     // File context menu items
     contextMenu.addItem({
         id: 'open-in-pane-1',
-        label: 'Pane 1에서 열기',
+        label: '좌측 탭에서 열기',
         icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
         group: 'open',
         order: 1,
@@ -123,7 +123,7 @@ function initialize() {
 
     contextMenu.addItem({
         id: 'open-in-pane-2',
-        label: 'Pane 2에서 열기',
+        label: '우측 탭에서 열기',
         icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>',
         group: 'open',
         order: 2,
