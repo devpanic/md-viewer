@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(cargo build:*)",
+      "Bash(git add src/file_watcher.rs src/main.rs src/routes.rs src/websocket.rs static/js/app.js static/js/file-browser.js)",
+      "Bash(sed \"1d;$d\")",
+      "Read(//tmp/**)",
+      "Bash(rm prototype-green.html prototype-purple.html prototype.html && git add src/main.rs && git commit -m \"$\\(cat <<'EOF'\nAdd cache-busting version params to static file URLs and remove prototypes\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git status)",
+      "Bash(git add:*)",
+      "Bash(git filter-branch:*)"
+    ]
+  }
+}
