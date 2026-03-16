@@ -30,7 +30,8 @@ $ARGUMENTS
 ### 3. 커밋
 
 - 변경된 파일만 선택적으로 staging한다 (git add -A 금지)
-- 커밋 메시지는 변경 내용을 간결하게 요약한다
+- Conventional Commits 형식을 사용한다 (feat:, fix:, refactor:, docs:, chore: 등)
+- 커밋 메시지 본문은 한글로 작성한다 (예: `feat: 다크모드 토글 기능 추가`)
 
 ### 4. Push 및 PR 생성
 
